@@ -78,7 +78,7 @@ def write_inference_table(inference: pd.DataFrame, path: Path) -> None:
         r"\begin{tabular}{lrrrr}",
         r"\toprule",
         (
-            r"Comparator & Raw RMSE difference (95\% CI) & \(p\) & "
+            r"Comparator & Physical-mean RMSE difference (95\% CI) & \(p\) & "
             r"\(W_2^2\) difference (95\% CI) & \(p\) \\"
         ),
         r"\midrule",
@@ -133,12 +133,13 @@ def write_performance_table(summary: pd.DataFrame, path: Path) -> None:
             r"Entries average 183 held-out target windows across five "
             r"chronological rolling origins. Lower values are better. Local "
             r"BWAR selects its reference window length and ridge from the "
-            r"validation block of each origin.}"
+            r"validation block of each origin. The physical-mean RMSE is "
+            r"standardized using fitting-block scales.}"
         ),
         r"\label{tab:divvy-performance}",
         r"\begin{tabular}{lrr}",
         r"\toprule",
-        r"Method & Raw-window mean RMSE & Gaussian \(W_2^2\) loss \\",
+        r"Method & Physical-mean RMSE & Gaussian \(W_2^2\) loss \\",
         r"\midrule",
     ]
     for label, method in METHOD_ROWS:
@@ -173,7 +174,7 @@ def write_horizon_table(summary: pd.DataFrame, path: Path) -> None:
         r"\centering",
         (
             r"\caption{Horizon sensitivity of the Divvy physical endpoint. "
-            r"Entries are target-weighted raw-window mean RMSEs over the same "
+            r"Entries are target-weighted standardized physical-mean RMSEs over the same "
             r"five chronological rolling origins. Lower values are better.}"
         ),
         r"\label{tab:divvy-horizon}",

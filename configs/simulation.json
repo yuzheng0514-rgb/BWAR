@@ -6,7 +6,7 @@
       "dimension": 8,
       "phi": 0.70,
       "dispersion": 0.35,
-      "ar_model": "diagonal AR(1)"
+      "ar_model": "diagonal ridge Yule-Walker AR(1)"
     }
   },
   "rolling_reference_drift": {
@@ -19,6 +19,7 @@
     "fit_fraction": 0.45,
     "validation_fraction": 0.20,
     "reference_iterations": 3,
-    "refresh_period": 12
+    "refresh_period": 12,
+    "coordinate_model": "diagonal ridge Yule-Walker AR(1)"
   }
 }

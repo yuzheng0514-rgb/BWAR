@@ -22,6 +22,7 @@ from bwar.paper_jcgs.divvy_data import (  # noqa: E402
 )
 from bwar.paper_jcgs.divvy_target_level import (  # noqa: E402
     evaluate_target_panel,
+    method_level_summary,
     paired_inference,
 )
 import bwar.paper_jcgs.divvy_artifacts as rr  # noqa: E402
@@ -42,6 +43,16 @@ BOOTSTRAP_SENSITIVITY_BLOCK_LENGTH = 6
 BOOTSTRAP_REPLICATES = 10_000
 BOOTSTRAP_SEED = 20_260_714
 DEFAULT_OUT = ROOT / "results" / "generated" / "divvy"
+TARGET_METHODS = (
+    "persistence",
+    "raw_var_window_ar",
+    "seasonal_window_naive",
+    "euclidean_gaussian_ar",
+    "cholesky_gaussian_ar",
+    "log_euclidean_gaussian_ar",
+    "fixed_bwar",
+    "local_bwar",
+)
 
 
 def write_target_level_outputs(
@@ -410,7 +421,7 @@ def write_manifest(
         "primary_horizon_rule": "ceil(window / step), the first non-overlapping target window",
         "reference": "fixed Bures barycenter computed from each origin's fit block",
         "ar_model": "full AR(1)",
-        "primary_endpoint": "training-standardized future raw-window mean RMSE",
+        "primary_endpoint": "training-standardized physical-mean RMSE",
         "supplement_endpoint": "same-task Gaussian W2-squared loss",
         "evaluation_protocol": str(long["evaluation_protocol"].iloc[0]),
         "station_selection": "top activity-variability score using only the first origin's raw fit block",
@@ -556,6 +567,13 @@ def run(out_dir: Path, *, h2_monthly: bool = False) -> None:
         domain_profile=profile,
         ridge_grid=rob.DEFAULT_RIDGE_GRID,
     )
+    target_method_summary = method_level_summary(
+        target_panel,
+        methods=TARGET_METHODS,
+        block_length=BOOTSTRAP_BLOCK_LENGTH,
+        replicates=BOOTSTRAP_REPLICATES,
+        seed=BOOTSTRAP_SEED,
+    )
 
     long.to_csv(out_dir / "origin_level_results.csv", index=False)
     summary.to_csv(out_dir / "configuration_summary.csv", index=False)
@@ -574,6 +592,10 @@ def run(out_dir: Path, *, h2_monthly: bool = False) -> None:
         tuning=local_tuning,
         selected=local_selected,
         inference=inference,
+    )
+    target_method_summary.to_csv(
+        out_dir / "method_level_bootstrap_summary.csv",
+        index=False,
     )
 
     rr.write_application_table(method_summary, case, table_dir / "redone_realdata_application.tex")

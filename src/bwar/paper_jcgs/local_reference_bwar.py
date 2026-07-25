@@ -877,33 +877,35 @@ class RollingBuresReference:
 
 
 @dataclass(frozen=True)
-class DualRidgeAR1:
-    """Dual ridge AR(1) fit whose parameter arrays are owned and read-only.
+class DualRidgeYuleWalkerAR1:
+    """Memory-efficient ridge Yule--Walker AR(1) fit.
 
-    ``x_centered`` stores centered lagged-observation rows, and ``y_mean`` is
-    the response mean. For conceptual ``B = x_centered.T @ dual_coef``, the
-    affine intercept at zero is ``y_mean - x_mean @ B``; ``B`` is not stored.
+    The fitted coefficient matrix is represented as ``projection @ response``
+    so a high-dimensional coordinate system does not require storing or
+    inverting a full coordinate-by-coordinate matrix.
     """
 
-    x_mean: np.ndarray
-    y_mean: np.ndarray
-    x_centered: np.ndarray
-    dual_coef: np.ndarray
+    coordinate_mean: np.ndarray
+    projection: np.ndarray
+    response: np.ndarray
 
     def __post_init__(self) -> None:
-        for name in ("x_mean", "y_mean", "x_centered", "dual_coef"):
+        for name in ("coordinate_mean", "projection", "response"):
             object.__setattr__(self, name, _immutable_float_array(getattr(self, name)))
 
     def predict(self, state: np.ndarray) -> np.ndarray:
         """Predict the next coordinate row from one finite fitted-shape state."""
 
         state = _as_float_array(state, name="state")
-        if state.shape != self.x_mean.shape:
+        if state.shape != self.coordinate_mean.shape:
             raise ValueError("state shape does not match fitted AR state shape")
         if not np.isfinite(state).all():
             raise ValueError("state must be finite")
         with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-            prediction = self.y_mean + ((state - self.x_mean) @ self.x_centered.T) @ self.dual_coef
+            prediction = (
+                self.coordinate_mean
+                + ((state - self.coordinate_mean) @ self.projection) @ self.response
+            )
         if not np.isfinite(prediction).all():
             raise ValueError("prediction became nonfinite for the supplied state")
         return prediction
@@ -923,14 +925,17 @@ class DualRidgeAR1:
         return predicted
 
 
-def fit_dual_ridge_ar1(coordinates: np.ndarray, *, ridge: float) -> DualRidgeAR1:
-    """Fit dual ridge AR(1) to time-ordered rows without forming a q-by-q fit.
+def fit_dual_ridge_yule_walker_ar1(
+    coordinates: np.ndarray,
+    *,
+    ridge: float,
+) -> DualRidgeYuleWalkerAR1:
+    """Fit the article's ridge Yule--Walker AR(1) in dual form.
 
-    Each row is one observation and each column is one coordinate. Predictors
-    and responses are centered separately, and ``y_mean`` is the response
-    mean. For conceptual ``B = x_centered.T @ dual_coef``, the zero-state
-    affine intercept is ``y_mean - x_mean @ B``. Returned arrays are defensive,
-    read-only copies owned by the model.
+    This is algebraically identical to the full estimator in
+    :func:`bwar.paper_jcgs.gaussian_models.fit_var`, but solves an
+    observation-by-observation system when the coordinate dimension is larger
+    than the local fitting window.
     """
 
     coordinates = _as_float_array(coordinates, name="coordinates")
@@ -949,38 +954,51 @@ def fit_dual_ridge_ar1(coordinates: np.ndarray, *, ridge: float) -> DualRidgeAR1
     if not np.isfinite(ridge_value) or ridge_value <= 0:
         raise ValueError("ridge must be a finite real scalar greater than zero")
 
-    X = coordinates[:-1]
-    Y = coordinates[1:]
+    n = len(coordinates)
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        x_mean = X.mean(axis=0)
-        y_mean = Y.mean(axis=0)
-    if not np.isfinite(x_mean).all() or not np.isfinite(y_mean).all():
-        raise ValueError("nonfinite intermediate means while fitting dual ridge AR(1)")
+        coordinate_mean = coordinates.mean(axis=0)
+    if not np.isfinite(coordinate_mean).all():
+        raise ValueError(
+            "nonfinite coordinate mean while fitting ridge Yule--Walker AR(1)"
+        )
 
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        x_centered = X - x_mean
-        y_centered = Y - y_mean
-    if not np.isfinite(x_centered).all() or not np.isfinite(y_centered).all():
-        raise ValueError("nonfinite centered coordinates while fitting dual ridge AR(1)")
+        centered = coordinates - coordinate_mean
+    if not np.isfinite(centered).all():
+        raise ValueError(
+            "nonfinite centered coordinates while fitting ridge Yule--Walker AR(1)"
+        )
 
+    lagged = centered[:-1]
+    response = centered[1:]
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        gram = x_centered @ x_centered.T
+        gram = centered @ centered.T
     if not np.isfinite(gram).all():
-        raise ValueError("nonfinite Gram matrix while fitting dual ridge AR(1)")
+        raise ValueError(
+            "nonfinite Gram matrix while fitting ridge Yule--Walker AR(1)"
+        )
 
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        system = gram + ridge_value * np.eye(len(x_centered))
+        system = gram + n * ridge_value * np.eye(n)
     if not np.isfinite(system).all():
-        raise ValueError("nonfinite regularized Gram matrix while fitting dual ridge AR(1)")
+        raise ValueError(
+            "nonfinite regularized Gram matrix while fitting ridge "
+            "Yule--Walker AR(1)"
+        )
 
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
         try:
-            dual_coef = np.linalg.solve(system, y_centered)
+            correction = np.linalg.solve(system, centered @ lagged.T)
         except np.linalg.LinAlgError as exc:
-            raise ValueError("dual ridge system could not be solved") from exc
-    if not np.isfinite(dual_coef).all():
-        raise ValueError("nonfinite dual coefficients while fitting dual ridge AR(1)")
-    return DualRidgeAR1(x_mean, y_mean, x_centered, dual_coef)
+            raise ValueError(
+                "dual ridge Yule--Walker system could not be solved"
+            ) from exc
+        projection = (
+            lagged.T - centered.T @ correction
+        ) / ((n - 1) * ridge_value)
+    if not np.isfinite(projection).all():
+        raise ValueError("nonfinite dual ridge Yule--Walker projection")
+    return DualRidgeYuleWalkerAR1(coordinate_mean, projection, response)
 
 
 @dataclass(frozen=True)
@@ -1136,7 +1154,7 @@ def forecast_online_encoded(
     if not np.isfinite(active_coordinates).all():
         raise ValueError("active coordinates must be finite")
 
-    model = fit_dual_ridge_ar1(
+    model = fit_dual_ridge_yule_walker_ar1(
         active_coordinates,
         ridge=ridge,
     )
@@ -1333,7 +1351,10 @@ def forecast_local_bwar(
     if geometry.coordinates.shape[1:] != (expected_coordinate_dimension,):
         raise ValueError("geometry coordinate dimension is incompatible with its reference")
 
-    model = fit_dual_ridge_ar1(geometry.coordinates, ridge=ridge)
+    model = fit_dual_ridge_yule_walker_ar1(
+        geometry.coordinates,
+        ridge=ridge,
+    )
     predicted_coordinate = model.predict_recursive(
         geometry.coordinates[-1],
         horizon=horizon,

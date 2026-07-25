@@ -202,7 +202,7 @@ def write_application_table(method_summary: pd.DataFrame, case: pd.Series, path:
     lines = [
         r"\begin{table}[H]",
         r"\centering",
-        rf"\caption{{{tex_escape(str(case['display_dataset']))} real-data application. Entries are mean (standard error) over chronological rolling-origin blocks; lower is better. The primary endpoint is training-standardized future raw-window mean RMSE, and the second endpoint is the same-task Gaussian \(W_2^2\) loss.}}",
+        rf"\caption{{{tex_escape(str(case['display_dataset']))} real-data application. Entries are mean (standard error) over chronological rolling-origin blocks; lower is better. The primary endpoint is training-standardized physical-mean RMSE, and the second endpoint is the same-task Gaussian \(W_2^2\) loss.}}",
         r"\label{tab:redone-realdata-application}",
         r"\resizebox{\linewidth}{!}{%",
         rf"\begin{{tabular}}{{{align}}}",
@@ -229,7 +229,7 @@ def write_horizon_table(method_summary: pd.DataFrame, case: pd.Series, path: Pat
     lines = [
         r"\begin{table}[H]",
         r"\centering",
-        rf"\caption{{{tex_escape(str(case['display_dataset']))} horizon sensitivity for the primary raw-window mean endpoint. Entries are mean (standard error) over chronological rolling-origin blocks; lower is better.}}",
+        rf"\caption{{{tex_escape(str(case['display_dataset']))} horizon sensitivity for the standardized physical-mean endpoint. Entries are mean (standard error) over chronological rolling-origin blocks; lower is better.}}",
         r"\label{tab:redone-realdata-horizon}",
         r"\resizebox{0.92\linewidth}{!}{%",
         r"\begin{tabular}{l" + "r" * len(methods) + r"}",

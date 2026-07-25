@@ -9,7 +9,7 @@
   "step_hours": 24,
   "horizons": [3, 4, 6],
   "rolling_origins": 5,
-  "coordinate_model": "full ridge VAR(1)",
+  "coordinate_model": "full ridge Yule-Walker VAR(1)",
   "local_reference_windows": [24, 48, 72],
   "bootstrap": {
     "kind": "origin-preserving moving-block bootstrap",

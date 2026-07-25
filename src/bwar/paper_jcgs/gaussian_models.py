@@ -20,7 +20,7 @@ DEFAULT_RIDGE_GRID = (1e-6, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0)
 REFERENCE_LIBRARY_MODE = "full"
 DEFAULT_DOMAIN_METRIC_PROFILE = {
     "metric": "station_demand_level_rmse",
-    "label": "standardized log station-demand level RMSE",
+    "label": "training-standardized station-demand mean RMSE",
     "kind": "mean_rmse",
 }
 
@@ -172,29 +172,45 @@ def log_euclidean_decode(z: np.ndarray, d: int) -> tuple[np.ndarray, np.ndarray]
 
 
 def fit_var(Z: np.ndarray, end: int, *, lam: float, model: str) -> np.ndarray:
-    X = Z[: end - 1]
-    Y = Z[1:end]
-    if len(X) < 2:
+    """Fit the article's ridge Yule--Walker VAR(1) in row-vector form.
+
+    With coordinates centered by their full fitting-block mean, the estimator
+    is ``B = Gamma_1 @ inv(Gamma_0 + lam * I)``. The returned augmented matrix
+    stores ``B.T`` below the intercept so existing recursive row forecasts
+    implement ``mean + (state - mean) @ B.T``.
+    """
+
+    fitted = np.asarray(Z[:end], dtype=float)
+    if len(fitted) < 3:
         raise ValueError("not enough observations to fit VAR")
+    if not np.isfinite(fitted).all():
+        raise ValueError("VAR coordinates must be finite")
+    lam = float(lam)
+    if not np.isfinite(lam) or lam <= 0.0:
+        raise ValueError("lam must be a finite positive scalar")
+
+    n, q = fitted.shape
+    coordinate_mean = fitted.mean(axis=0)
+    centered = fitted - coordinate_mean
+    gamma0_diag = np.mean(centered**2, axis=0)
+    gamma1_diag = np.mean(centered[1:] * centered[:-1], axis=0)
 
     if model == "diag":
-        W = np.zeros((Z.shape[1] + 1, Z.shape[1]))
-        for j in range(Z.shape[1]):
-            Xj = np.column_stack([np.ones(len(X)), X[:, j]])
-            penalty = lam * np.eye(2)
-            penalty[0, 0] = 0.0
-            coef = np.linalg.solve(Xj.T @ Xj + penalty, Xj.T @ Y[:, j])
-            W[0, j] = coef[0]
-            W[j + 1, j] = coef[1]
-        return W
+        row_coefficients = np.diag(gamma1_diag / (gamma0_diag + lam))
+    elif model == "full":
+        gamma0 = centered.T @ centered / n
+        gamma1 = centered[1:].T @ centered[:-1] / (n - 1)
+        row_coefficients = np.linalg.solve(
+            gamma0 + lam * np.eye(q),
+            gamma1.T,
+        )
+    else:
+        raise ValueError(f"unknown ar_model: {model}")
 
-    if model == "full":
-        Xa = np.column_stack([np.ones(len(X)), X])
-        penalty = lam * np.eye(Xa.shape[1])
-        penalty[0, 0] = 0.0
-        return np.linalg.solve(Xa.T @ Xa + penalty, Xa.T @ Y)
-
-    raise ValueError(f"unknown ar_model: {model}")
+    W = np.empty((q + 1, q), dtype=float)
+    W[0] = coordinate_mean - coordinate_mean @ row_coefficients
+    W[1:] = row_coefficients
+    return W
 
 
 def recursive_predict_z(z0: np.ndarray, W: np.ndarray, horizon: int) -> np.ndarray:

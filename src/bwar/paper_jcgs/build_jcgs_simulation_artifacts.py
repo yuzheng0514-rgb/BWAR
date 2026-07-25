@@ -901,8 +901,9 @@ def write_reference_drift_table(summary: pd.DataFrame, path: Path, reps: int) ->
             r"refitting. Entries are mean full Gaussian \(W_2^2\) loss ratios "
             rf"to persistence over {reps} independent replications, with "
             r"standard errors in parentheses. All autoregressive methods use "
-            r"the same trailing window, diagonal AR(1) restriction, ridge "
-            r"grid, and forecast origins. Lower values are better.}"
+            r"the same trailing window, diagonal ridge Yule--Walker AR(1) "
+            r"restriction, ridge grid, and forecast origins. Lower values are "
+            r"better.}"
         ),
         r"\label{tab:rolling-refit-reference-shift}",
         r"\resizebox{\linewidth}{!}{%",

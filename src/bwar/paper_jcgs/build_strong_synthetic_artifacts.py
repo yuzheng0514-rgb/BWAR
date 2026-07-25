@@ -22,6 +22,7 @@ from bwar.gaussian_geometry import (  # noqa: E402
     project_spd,
     triu_vec,
 )
+from bwar.paper_jcgs.gaussian_models import fit_var  # noqa: E402
 
 
 OUT_DIR = ROOT / "results" / "generated" / "fixed_simulation"
@@ -163,29 +164,6 @@ def simulate_transport_linear_gaussians(
         "spectral_shell_high": 20.0,
     }
     return means, covs, ref_mean, ref_cov, meta
-
-
-def fit_var(Z: np.ndarray, end: int, *, lam: float, model: str = "diag") -> np.ndarray:
-    X = np.asarray(Z[: end - 1], dtype=float)
-    Y = np.asarray(Z[1:end], dtype=float)
-    if len(X) < 2:
-        raise ValueError("not enough observations to fit VAR")
-    if model == "diag":
-        W = np.zeros((Z.shape[1] + 1, Z.shape[1]), dtype=float)
-        for j in range(Z.shape[1]):
-            Xj = np.column_stack([np.ones(len(X)), X[:, j]])
-            penalty = lam * np.eye(2)
-            penalty[0, 0] = 0.0
-            coef = np.linalg.solve(Xj.T @ Xj + penalty, Xj.T @ Y[:, j])
-            W[0, j] = coef[0]
-            W[j + 1, j] = coef[1]
-        return W
-    if model == "full":
-        Xa = np.column_stack([np.ones(len(X)), X])
-        penalty = lam * np.eye(Xa.shape[1])
-        penalty[0, 0] = 0.0
-        return np.linalg.solve(Xa.T @ Xa + penalty, Xa.T @ Y)
-    raise ValueError(f"unknown model: {model}")
 
 
 def gaussian_w2_squared(mean_a: np.ndarray, cov_a: np.ndarray, mean_b: np.ndarray, cov_b: np.ndarray) -> tuple[float, float, float]:
@@ -512,7 +490,7 @@ def write_main_table(summary: pd.DataFrame, path: Path) -> None:
     lines = [
         r"\begin{table}[H]",
         r"\centering",
-        r"\caption{Transport-linear Gaussian simulation. Entries are mean test-loss ratios to persistence over 50 replications, with standard errors in parentheses. Lower values are better. The design uses \(d=8\), \(T=320\), a non-identity Bures reference, and diagonal AR(1) fits.}",
+        r"\caption{Transport-linear Gaussian simulation. Entries are mean test-loss ratios to persistence over 50 replications, with standard errors in parentheses. Lower values are better. The design uses \(d=8\), \(T=320\), a non-identity Bures reference, and diagonal ridge Yule--Walker AR(1) fits.}",
         r"\label{tab:synthetic-transport-main}",
         r"\resizebox{0.84\linewidth}{!}{%",
         r"\begin{tabular}{lrrr}",

@@ -3,9 +3,9 @@
 Code accompanying **Bures--Wasserstein Autoregression for Gaussian
 Distributional Time Series** by Yuzheng Dong, Junlie Huang, and Cheng Meng.
 
-The repository contains the BWAR implementation, simulation programs, the
-Divvy rolling-origin analysis, and scripts for producing the empirical tables
-and figures.
+The repository contains the ridge Yule--Walker BWAR implementation, simulation
+programs, the Divvy rolling-origin analysis, and scripts for producing the
+empirical tables and figures.
 
 ## Structure
 

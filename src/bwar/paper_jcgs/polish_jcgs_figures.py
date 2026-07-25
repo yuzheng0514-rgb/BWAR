@@ -377,7 +377,7 @@ def make_realdata_figure() -> None:
         ax.patch.set_linewidth(0.3)
 
     for ax, metric, ylabel, title in [
-        (ax_raw, "raw_rmse", "Raw-window mean RMSE", "Physical endpoint"),
+        (ax_raw, "raw_rmse", "Standardized mean RMSE", "Physical endpoint"),
         (ax_w2, "w2", r"Gaussian $W_2^2$ loss", "Distributional endpoint"),
     ]:
         metric_summary = summary.loc[summary["metric"].eq(metric)]
@@ -417,7 +417,7 @@ def make_realdata_figure() -> None:
         (
             ax_raw_diff,
             "raw_rmse",
-            r"Difference in raw RMSE",
+            r"Difference in standardized mean RMSE",
             rf"Local BWAR contrasts at $h={main_h}$",
         ),
         (
