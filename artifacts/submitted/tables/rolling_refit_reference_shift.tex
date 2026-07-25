@@ -1,0 +1,18 @@
+\begin{table}[H]
+\centering
+\caption{Reference-shift performance under rolling coefficient refitting. Entries are mean full Gaussian \(W_2^2\) loss ratios to persistence over 50 independent replications, with standard errors in parentheses. All autoregressive methods use the same trailing window, diagonal AR(1) restriction, ridge grid, and forecast origins. Lower values are better.}
+\label{tab:rolling-refit-reference-shift}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Setting & Persistence & Euclidean AR & Cholesky AR & Log-Euclidean AR & Fixed BWAR & Local BWAR \\
+\midrule
+No shift & 1.000 (0.000) & 0.940 (0.004) & 0.950 (0.004) & 0.936 (0.003) & \textbf{0.918 (0.003)} & 0.920 (0.003) \\
+Mean shift & 1.000 (0.000) & 0.940 (0.004) & 0.951 (0.004) & 0.937 (0.003) & \textbf{0.918 (0.003)} & 0.920 (0.003) \\
+Covariance shift & 1.000 (0.000) & 0.986 (0.006) & 0.970 (0.009) & 0.946 (0.004) & 0.920 (0.003) & \textbf{0.919 (0.003)} \\
+Joint shift & 1.000 (0.000) & 0.985 (0.006) & 0.969 (0.009) & 0.946 (0.004) & 0.920 (0.003) & \textbf{0.918 (0.003)} \\
+Gradual joint shift & 1.000 (0.000) & 0.976 (0.005) & 0.987 (0.008) & 0.962 (0.004) & 0.927 (0.003) & \textbf{0.921 (0.003)} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

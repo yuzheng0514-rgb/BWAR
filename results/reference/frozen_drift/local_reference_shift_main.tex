@@ -1,0 +1,20 @@
+\begin{table}[H]
+\centering
+\caption{Local-reference adaptation under reference shifts.
+Entries are mean Gaussian \(W_2^2\) loss ratios to persistence over \(10\) replications, with standard errors in parentheses.
+Lower values are better.}
+\label{tab:local-reference-shift-main}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Setting & Persistence & Fixed BWAR & Local BWAR & Euclidean AR & Cholesky AR & Log-Euclidean AR \\
+\midrule
+No shift & 1.000 (0.000) & 0.944 (0.009) & 0.947 (0.007) & \textbf{0.943 (0.009)} & 0.944 (0.009) & 0.945 (0.009) \\
+Mean shift & 1.000 (0.000) & 0.963 (0.010) & \textbf{0.950 (0.006)} & 0.962 (0.011) & 0.963 (0.010) & 0.964 (0.010) \\
+Covariance shift & 1.000 (0.000) & 5.416 (0.823) & \textbf{0.955 (0.006)} & 0.983 (0.011) & 0.991 (0.010) & 0.978 (0.009) \\
+Joint shift & 1.000 (0.000) & 3.613 (0.560) & \textbf{0.956 (0.006)} & 0.995 (0.013) & 1.002 (0.012) & 0.991 (0.011) \\
+Gradual joint shift & 1.000 (0.000) & 3.364 (0.512) & \textbf{0.992 (0.019)} & 1.119 (0.035) & 1.147 (0.036) & 1.117 (0.031) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

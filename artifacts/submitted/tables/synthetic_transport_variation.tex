@@ -1,0 +1,18 @@
+\begin{table}[H]
+\centering
+\caption{Parameter variation for the transport-linear Gaussian simulation. Entries are full \(W_2^2\) loss ratios to persistence, reported as mean (standard error) over 50 replications.}
+\label{tab:synthetic-transport-variation}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrrrrrr}
+\toprule
+Design & \(T\) & \(d\) & \(\phi\) & Dispersion & Euclidean AR & Cholesky AR & Log-Euclidean AR & BWAR \\
+\midrule
+Baseline & 320 & 8 & 0.70 & 0.35 & 0.974 (0.004) & 1.010 (0.006) & 0.970 (0.005) & \textbf{0.887 (0.002)} \\
+Shorter series & 200 & 8 & 0.70 & 0.35 & 0.986 (0.006) & 1.016 (0.007) & 0.973 (0.006) & \textbf{0.893 (0.003)} \\
+Higher dimension & 320 & 10 & 0.70 & 0.32 & 0.982 (0.003) & 1.018 (0.004) & 0.967 (0.004) & \textbf{0.891 (0.002)} \\
+Weaker dynamics & 320 & 8 & 0.50 & 0.35 & 0.862 (0.004) & 0.922 (0.007) & 0.884 (0.004) & \textbf{0.792 (0.003)} \\
+Larger variation & 320 & 8 & 0.70 & 0.50 & 0.989 (0.005) & 1.018 (0.007) & 0.982 (0.005) & \textbf{0.886 (0.002)} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}

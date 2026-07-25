@@ -1,0 +1,17 @@
+\begin{table}[H]
+\centering
+\caption{Paired local BWAR contrasts at \(h=3\). Entries report local BWAR minus the comparator and a two-sided 95\% origin-preserving moving-block bootstrap confidence interval (CI). Negative values favor local BWAR\@. Intervals use block length three and 10,000 replicates. Reported one-sided \(p\)-values test for a negative expected difference and use Holm adjustment over all six non-BWAR methods within each endpoint; persistence, raw VAR, and seasonal rows are omitted from this compact display. The prespecified local-versus-fixed comparison is evaluated separately.}
+\label{tab:divvy-inference}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Comparator & Raw RMSE difference (95\% CI) & \(p\) & \(W_2^2\) difference (95\% CI) & \(p\) \\
+\midrule
+Fixed BWAR & \(-0.024\;[-0.0469,-0.0005]\) & 0.018 & \(-0.342\;[-1.800,1.211]\) & 0.332 \\
+Cholesky AR & \(-0.029\;[-0.051,-0.004]\) & 0.006 & \(-1.872\;[-3.506,-0.260]\) & 0.013 \\
+Log-Euclidean AR & \(-0.047\;[-0.072,-0.022]\) & \(<0.001\) & \(-2.552\;[-4.425,-0.733]\) & 0.010 \\
+Euclidean AR & \(-0.057\;[-0.085,-0.028]\) & \(<0.001\) & \(-4.959\;[-6.723,-3.215]\) & \(<0.001\) \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
