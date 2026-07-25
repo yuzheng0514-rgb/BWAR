@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from bwar.paper_jcgs.strong_realdata_screen import bikeshare_zip_path
+from bwar.paper_jcgs.divvy_data import divvy_zip_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,7 +41,7 @@ def main() -> None:
         expected = source["sha256"]
         path = ROOT / source["path"]
         if not path.exists() and not args.verify_only:
-            path = bikeshare_zip_path("divvy", month)
+            path = divvy_zip_path(month)
         if not path.exists():
             failures.append(f"{month}: missing {path}")
             continue

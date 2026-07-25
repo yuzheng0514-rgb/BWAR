@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bwar.bwar_experiments import (  # noqa: E402
+from bwar.gaussian_geometry import (  # noqa: E402
     bw_barycenter,
     mat_exp,
     mat_from_triu,

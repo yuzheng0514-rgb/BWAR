@@ -16,16 +16,16 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bwar.paper_jcgs.raw_physical_level_screen import (  # noqa: E402
+from bwar.paper_jcgs.divvy_data import (  # noqa: E402
     _standardized_stream_with_profile,
-    bikeshare_matrix,
+    divvy_matrix,
 )
 from bwar.paper_jcgs.divvy_target_level import (  # noqa: E402
     evaluate_target_panel,
     paired_inference,
 )
-import bwar.paper_jcgs.redo_realdata_application as rr  # noqa: E402
-import bwar.paper_jcgs.rolling_origin_backtest as rob  # noqa: E402
+import bwar.paper_jcgs.divvy_artifacts as rr  # noqa: E402
+import bwar.paper_jcgs.rolling_origin as rob  # noqa: E402
 
 
 DATASET = "divvy"
@@ -452,9 +452,9 @@ def write_manifest(
             str(source.relative_to(ROOT)): sha256(source)
             for source in [
                 Path(__file__),
-                Path(__file__).with_name("redo_realdata_application.py"),
-                Path(__file__).with_name("rolling_origin_backtest.py"),
-                Path(__file__).with_name("raw_physical_level_screen.py"),
+                Path(__file__).with_name("divvy_artifacts.py"),
+                Path(__file__).with_name("rolling_origin.py"),
+                Path(__file__).with_name("divvy_data.py"),
                 Path(__file__).with_name("divvy_target_level.py"),
                 Path(__file__).with_name("local_reference_bwar.py"),
             ]
@@ -478,8 +478,7 @@ def run(out_dir: Path, *, h2_monthly: bool = False) -> None:
             raise ValueError("monthly H2 confirmation requires January--December 2024")
         fit_raw_end = int((pd.Timestamp("2024-05-01") - pd.Timestamp("2024-01-01")) / pd.Timedelta(hours=1))
 
-    matrix, station_ids = bikeshare_matrix(
-        DATASET,
+    matrix, station_ids = divvy_matrix(
         DIMENSION,
         months=MONTHS,
         window=WINDOW,

@@ -6,7 +6,7 @@ from numbers import Real
 import numpy as np
 from scipy import linalg as scipy_linalg
 
-from bwar.bwar_experiments import project_spd
+from bwar.gaussian_geometry import project_spd
 
 
 _SPD_FLOOR = 1e-8

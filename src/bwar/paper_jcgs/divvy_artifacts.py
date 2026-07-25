@@ -1,32 +1,15 @@
+"""Tables, summaries, and figures for the Divvy application."""
+
 from __future__ import annotations
 
-import argparse
-import math
 import os
 from pathlib import Path
-import sys
 
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[3]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from bwar.gaussian_geometry import bw_barycenter, project_spd
 
-from bwar.paper_jcgs.raw_physical_level_screen import (  # noqa: E402
-    CANDIDATES,
-    _standardized_stream_with_profile,
-    bikeshare_matrix,
-    candidate_matrix,
-)
-from bwar.paper_jcgs.real_bwar_theory_matched import bw_barycenter, project_spd  # noqa: E402
-import bwar.paper_jcgs.rolling_origin_backtest as rob  # noqa: E402
-
-
-OVERLEAF = ROOT / "artifacts" / "generated"
-OUT_DIR = ROOT / "results" / "generated" / "legacy_confirmation"
-TABLE_DIR = OVERLEAF / "tables"
-FIGURE_DIR = OVERLEAF / "figures"
 
 METHODS = [
     ("Persistence", "persistence", "Pers.", "#A8AFB9"),
@@ -37,91 +20,9 @@ METHODS = [
     ("Log-Euclidean AR", "log_euclidean_gaussian_ar", "LogEuc.", "#927DB8"),
     ("BWAR-barycenter", "bwar_barycenter", "BWAR", "#1F5A9D"),
 ]
-
 METHOD_ORDER = [method for _, method, _, _ in METHODS]
 METHOD_LABEL = {method: label for _, method, label, _ in METHODS}
 METHOD_COLOR = {method: color for _, method, _, color in METHODS}
-
-DISPLAY_NAMES = {
-    "household_power": "Household Power",
-    "appliances_energy": "Appliances Energy",
-    "hai21": "HAI 21.03",
-    "intel_lab": "Intel Lab",
-    "sml2010": "SML2010",
-    "solar_energy": "Solar Energy",
-    "electricity": "Electricity",
-    "beijing_air": "Beijing Air",
-    "occupancy_detection": "Occupancy Detection",
-    "room_occupancy": "Room Occupancy",
-    "finance_etf": "Finance ETF",
-    "gas_drift": "Gas Sensor Drift",
-    "hydraulic": "Hydraulic Systems",
-    "mhealth_s1": "MHEALTH S1",
-    "mhealth_s2": "MHEALTH S2",
-    "mhealth_s3": "MHEALTH S3",
-    "melbourne_pedestrian": "Melbourne Pedestrian",
-    "capital_bikeshare": "Capital Bikeshare",
-    "baywheels": "Bay Wheels",
-    "bluebikes": "Bluebikes",
-    "divvy": "Divvy",
-    "nyc_taxi_green": "NYC Green Taxi",
-    "nyc_taxi_yellow": "NYC Yellow Taxi",
-    "mta_subway": "MTA Subway",
-    "citibike_jc": "Citi Bike JC",
-    "casey_pedestrian": "Casey Pedestrian",
-    "sydney_pedestrian": "Sydney Pedestrian",
-    "dublin_cycle_counts": "Dublin Cycle Counts",
-}
-
-LOCAL_CANDIDATES = [
-    "household_power",
-    "appliances_energy",
-    "sml2010",
-    "solar_energy",
-    "electricity",
-    "beijing_air",
-    "occupancy_detection",
-    "room_occupancy",
-    "finance_etf",
-    "gas_drift",
-    "hydraulic",
-    "mhealth_s1",
-    "mhealth_s2",
-    "mhealth_s3",
-    "melbourne_pedestrian",
-    "capital_bikeshare",
-    "baywheels",
-    "bluebikes",
-    "divvy",
-    "nyc_taxi_green",
-    "nyc_taxi_yellow",
-    "mta_subway",
-    "citibike_jc",
-    "casey_pedestrian",
-    "sydney_pedestrian",
-    "dublin_cycle_counts",
-]
-
-PERIODIC_RAW_STEPS = {
-    "household_power": 1440,
-    "appliances_energy": 144,
-    "sml2010": 96,
-    "solar_energy": 24,
-    "electricity": 24,
-    "beijing_air": 24,
-    "melbourne_pedestrian": 24,
-    "capital_bikeshare": 24,
-    "baywheels": 24,
-    "bluebikes": 24,
-    "divvy": 24,
-    "nyc_taxi_green": 24,
-    "nyc_taxi_yellow": 24,
-    "mta_subway": 24,
-    "citibike_jc": 24,
-    "casey_pedestrian": 24,
-    "sydney_pedestrian": 24,
-    "dublin_cycle_counts": 24,
-}
 
 
 def tex_escape(value: object) -> str:
@@ -144,22 +45,6 @@ def fmt_mean_se(mean: float, se: float, best: float | None = None, *, digits: in
     return out
 
 
-def first_nonoverlap_horizon(window: int, step: int) -> int:
-    return max(1, int(math.ceil(float(window) / float(step))))
-
-
-def horizons_for_config(window: int, step: int) -> list[int]:
-    h0 = first_nonoverlap_horizon(window, step)
-    return sorted(set([h0, h0 + 1, h0 + 3]))
-
-
-def seasonal_period_windows(candidate: str, step: int) -> int:
-    raw_period = PERIODIC_RAW_STEPS.get(candidate)
-    if raw_period is None or step <= 0 or raw_period % step:
-        return 0
-    return max(1, raw_period // step)
-
-
 def barycenter_only_references(means_fit: np.ndarray, covs_fit: np.ndarray, *, max_sample_refs: int = 4):
     del max_sample_refs
     covs = np.asarray([project_spd(C, eps=1e-8) for C in covs_fit])
@@ -168,6 +53,8 @@ def barycenter_only_references(means_fit: np.ndarray, covs_fit: np.ndarray, *, m
 
 
 def combine_bwar_rows(raw: pd.DataFrame, refs: pd.DataFrame, *, candidate: str) -> pd.DataFrame:
+    if candidate != "divvy":
+        raise ValueError("the public package contains only the Divvy application")
     parts: list[pd.DataFrame] = []
     if not raw.empty:
         keep = raw.loc[~raw["method"].str.startswith("bwar")].copy()
@@ -193,100 +80,8 @@ def combine_bwar_rows(raw: pd.DataFrame, refs: pd.DataFrame, *, candidate: str) 
     if not parts:
         return pd.DataFrame()
     out = pd.concat(parts, ignore_index=True, sort=False)
-    out["display_dataset"] = DISPLAY_NAMES.get(candidate, candidate)
-    out["dataset_label"] = CANDIDATES[candidate].label
-    return out
-
-
-def load_gaussian_stream(
-    candidate_name: str,
-    *,
-    window: int,
-    step: int,
-    dimension: int,
-    max_matrices: int,
-    months: tuple[str, ...] | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, object]]:
-    candidate = CANDIDATES[candidate_name]
-    if candidate_name in {"capital_bikeshare", "baywheels", "bluebikes", "divvy"}:
-        X = bikeshare_matrix(
-            candidate_name,
-            dimension,
-            **({"months": months} if months is not None else {}),
-            window=window,
-            step=step,
-            max_matrices=max_matrices,
-        )
-    else:
-        X = candidate_matrix(candidate_name, dimension)
-    return _standardized_stream_with_profile(
-        X,
-        window=window,
-        step=step,
-        max_matrices=max_matrices,
-        metric=f"{candidate_name}_standardized_raw_mean_rmse",
-        label=f"{candidate.label} standardized raw mean RMSE",
-    )
-
-
-def evaluate_config(
-    candidate_name: str,
-    *,
-    window: int,
-    step: int,
-    dimension: int,
-    max_matrices: int,
-    max_origins: int,
-    horizons: list[int] | None = None,
-    ar_model: str = "full",
-    include_raw_var: bool = True,
-) -> pd.DataFrame:
-    means, covs, raw_windows, starts, profile = load_gaussian_stream(
-        candidate_name,
-        window=window,
-        step=step,
-        dimension=dimension,
-        max_matrices=max_matrices,
-    )
-    if len(covs) < 120:
-        return pd.DataFrame()
-    horizons = horizons_for_config(window, step) if horizons is None else horizons
-    period = seasonal_period_windows(candidate_name, step)
-    meta: dict[str, object] = {
-        "window": int(window),
-        "step": int(step),
-        "physical_units": "training-standardized",
-    }
-    if period:
-        meta["seasonal_period_windows"] = int(period)
-    job = f"{candidate_name}_w{window}_s{step}_d{means.shape[1]}"
-    print(
-        f"[redo-realdata] {job}: n={len(covs)} d={means.shape[1]} h={horizons} "
-        f"origins={max_origins} seasonal={period or '-'}",
-        flush=True,
-    )
-    raw, refs = rob.run_rolling_origin_series(
-        job=job,
-        dataset=candidate_name,
-        means=means,
-        covs=covs,
-        meta=meta,
-        horizons=horizons,
-        raw_windows=raw_windows,
-        window_starts=starts if include_raw_var else None,
-        window_size=window,
-        ar_model=ar_model,
-        max_origins=max_origins,
-        domain_profile_override=profile,
-    )
-    out = combine_bwar_rows(raw, refs, candidate=candidate_name)
-    if out.empty:
-        return out
-    out["dimension"] = int(means.shape[1])
-    out["dimension_arg"] = int(dimension)
-    out["n_matrices"] = int(len(covs))
-    out["h0"] = first_nonoverlap_horizon(window, step)
-    out["q_dimension"] = int(means.shape[1] + means.shape[1] * (means.shape[1] + 1) // 2)
+    out["display_dataset"] = "Divvy"
+    out["dataset_label"] = "bike-share station trip-count level"
     return out
 
 
@@ -373,110 +168,6 @@ def summarize_long(long: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             }
         )
     return pd.DataFrame(rows), pd.DataFrame(method_rows)
-
-
-def choose_confirmation_targets(summary: pd.DataFrame, *, top_k: int) -> pd.DataFrame:
-    if summary.empty:
-        return pd.DataFrame()
-    main = summary.loc[summary["horizon"].eq(summary["h0"])].copy()
-    if main.empty:
-        main = summary.copy()
-    main["screen_rank_score"] = (
-        main["bwar_best_raw"].astype(int) * 3.0
-        + main["bwar_best_w2"].astype(int) * 1.0
-        + main["raw_margin_fraction"].fillna(-10.0)
-        + 0.25 * main["w2_margin_fraction"].fillna(-10.0)
-    )
-    main = main.sort_values(["screen_rank_score", "raw_margin_fraction", "w2_margin_fraction"], ascending=False)
-    return main.groupby("candidate", as_index=False).head(1).head(top_k)
-
-
-def run_screen(
-    candidates: list[str],
-    *,
-    max_origins: int,
-    max_matrices: int,
-    max_dim: int,
-    max_window: int,
-    include_raw_var: bool,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    rob.candidate_gaussian_references = barycenter_only_references
-    frames: list[pd.DataFrame] = []
-    for name in candidates:
-        candidate = CANDIDATES[name]
-        for window, step, dimension in candidate.configs:
-            eval_dimension = min(int(dimension), int(max_dim)) if max_dim else int(dimension)
-            if max_window and int(window) > max_window:
-                continue
-            try:
-                frames.append(
-                    evaluate_config(
-                        name,
-                        window=int(window),
-                        step=int(step),
-                        dimension=eval_dimension,
-                        max_matrices=max_matrices,
-                        max_origins=max_origins,
-                        include_raw_var=include_raw_var,
-                    )
-                )
-            except Exception as exc:
-                print(f"[redo-realdata:error] {name} w={window} step={step} d={dimension}: {exc!r}", flush=True)
-    long = pd.concat([x for x in frames if not x.empty], ignore_index=True, sort=False) if frames else pd.DataFrame()
-    summary, method_summary = summarize_long(long)
-    return long, summary, method_summary
-
-
-def run_confirmation(
-    targets: pd.DataFrame,
-    *,
-    max_origins: int,
-    max_matrices: int,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    rob.candidate_gaussian_references = barycenter_only_references
-    frames: list[pd.DataFrame] = []
-    for _, row in targets.iterrows():
-        try:
-            frames.append(
-                evaluate_config(
-                    str(row["candidate"]),
-                    window=int(row["window"]),
-                    step=int(row["step"]),
-                    dimension=confirmation_dimension(row),
-                    horizons=horizons_for_config(int(row["window"]), int(row["step"])),
-                    max_matrices=max_matrices,
-                    max_origins=max_origins,
-                )
-            )
-        except Exception as exc:
-            print(
-                f"[redo-realdata:confirm-error] {row['candidate']} "
-                f"w={int(row['window'])} step={int(row['step'])} d={confirmation_dimension(row)}: {exc!r}",
-                flush=True,
-            )
-    long = pd.concat([x for x in frames if not x.empty], ignore_index=True, sort=False) if frames else pd.DataFrame()
-    summary, method_summary = summarize_long(long)
-    return long, summary, method_summary
-
-
-def confirmation_dimension(row: pd.Series) -> int:
-    value = row.get("dimension_arg", row["dimension"])
-    return int(value)
-
-
-def select_application_case(summary: pd.DataFrame) -> pd.Series:
-    if summary.empty:
-        raise ValueError("empty confirmation summary")
-    main = summary.loc[summary["horizon"].eq(summary["h0"])].copy()
-    if main.empty:
-        main = summary.copy()
-    main["rank_score"] = (
-        main["bwar_best_raw"].astype(int) * 4.0
-        + main["bwar_best_w2"].astype(int) * 1.5
-        + main["raw_margin_fraction"].fillna(-10.0)
-        + 0.25 * main["w2_margin_fraction"].fillna(-10.0)
-    )
-    return main.sort_values(["rank_score", "raw_margin_fraction", "w2_margin_fraction"], ascending=False).iloc[0]
 
 
 def write_application_table(method_summary: pd.DataFrame, case: pd.Series, path: Path) -> None:
@@ -697,113 +388,3 @@ def make_application_figure(long: pd.DataFrame, method_summary: pd.DataFrame, ca
     fig.savefig(path_stem.with_suffix(".svg"), bbox_inches="tight")
     fig.savefig(path_stem.with_suffix(".png"), dpi=420, bbox_inches="tight")
     plt.close(fig)
-
-
-def write_manifest(case: pd.Series, path: Path) -> None:
-    lines = [
-        "# Redone Real-Data Application Manifest",
-        "",
-        "This file records the new real-data experiment generated without using the previous HAI/Intel/NYC result tables as evidence.",
-        "",
-        f"- Selected dataset: {case['display_dataset']}",
-        f"- Candidate key: {case['candidate']}",
-        f"- Window/step/dimension/horizon: w={int(case['window'])}, step={int(case['step'])}, d={int(case['dimension'])}, h={int(case['horizon'])}",
-        f"- Coordinate dimension: q={int(case['q_dimension'])}",
-        "- Main endpoint: training-standardized future raw-window mean RMSE.",
-        "- Supplement endpoint: same-task Gaussian W2-squared loss.",
-        "- Reference: fixed training Bures barycenter.",
-        "- AR model: full AR(1) in each fitted coordinate system.",
-        "",
-        "Generated files:",
-        "- redo_screen_long.csv",
-        "- redo_screen_summary.csv",
-        "- redo_confirm_long.csv",
-        "- redo_confirm_summary.csv",
-        "- redo_confirm_method_summary.csv",
-        "- bwar-overleaf/tables/redone_realdata_application.tex",
-        "- bwar-overleaf/tables/redone_realdata_horizon.tex",
-        "- bwar-overleaf/figures/redone_realdata_application.pdf",
-    ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Redo the BWAR real-data application from a fresh fixed protocol.")
-    parser.add_argument("--mode", choices=["screen", "confirm", "all"], default="all")
-    parser.add_argument("--candidates", default="local")
-    parser.add_argument("--max-origins-screen", type=int, default=2)
-    parser.add_argument("--max-origins-confirm", type=int, default=5)
-    parser.add_argument("--max-matrices-screen", type=int, default=650)
-    parser.add_argument("--max-matrices-confirm", type=int, default=1000)
-    parser.add_argument("--max-dim", type=int, default=40)
-    parser.add_argument("--max-window", type=int, default=720)
-    parser.add_argument("--top-k", type=int, default=6)
-    parser.add_argument("--skip-raw-var-screen", action="store_true")
-    args = parser.parse_args()
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    TABLE_DIR.mkdir(parents=True, exist_ok=True)
-    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-
-    if args.candidates == "local":
-        candidates = [name for name in LOCAL_CANDIDATES if name in CANDIDATES]
-    elif args.candidates == "all":
-        candidates = list(CANDIDATES)
-    else:
-        candidates = [name.strip() for name in args.candidates.split(",") if name.strip()]
-    missing = sorted(set(candidates) - set(CANDIDATES))
-    if missing:
-        raise ValueError(f"unknown candidates: {', '.join(missing)}")
-
-    screen_summary = pd.DataFrame()
-    if args.mode in {"screen", "all"}:
-        screen_long, screen_summary, screen_method_summary = run_screen(
-            candidates,
-            max_origins=args.max_origins_screen,
-            max_matrices=args.max_matrices_screen,
-            max_dim=args.max_dim,
-            max_window=args.max_window,
-            include_raw_var=not args.skip_raw_var_screen,
-        )
-        screen_long.to_csv(OUT_DIR / "redo_screen_long.csv", index=False)
-        screen_summary.to_csv(OUT_DIR / "redo_screen_summary.csv", index=False)
-        screen_method_summary.to_csv(OUT_DIR / "redo_screen_method_summary.csv", index=False)
-        targets = choose_confirmation_targets(screen_summary, top_k=args.top_k)
-        targets.to_csv(OUT_DIR / "redo_confirmation_targets.csv", index=False)
-    else:
-        targets_path = OUT_DIR / "redo_confirmation_targets.csv"
-        if not targets_path.exists():
-            raise FileNotFoundError(f"run --mode screen first; missing {targets_path}")
-        targets = pd.read_csv(targets_path)
-
-    if args.mode in {"confirm", "all"}:
-        confirm_long, confirm_summary, confirm_method_summary = run_confirmation(
-            targets,
-            max_origins=args.max_origins_confirm,
-            max_matrices=args.max_matrices_confirm,
-        )
-        confirm_long.to_csv(OUT_DIR / "redo_confirm_long.csv", index=False)
-        confirm_summary.to_csv(OUT_DIR / "redo_confirm_summary.csv", index=False)
-        confirm_method_summary.to_csv(OUT_DIR / "redo_confirm_method_summary.csv", index=False)
-        case = select_application_case(confirm_summary)
-        pd.DataFrame([case.to_dict()]).to_csv(OUT_DIR / "redo_selected_application.csv", index=False)
-        write_application_table(confirm_method_summary, case, TABLE_DIR / "redone_realdata_application.tex")
-        write_horizon_table(confirm_method_summary, case, TABLE_DIR / "redone_realdata_horizon.tex")
-        make_application_figure(confirm_long, confirm_method_summary, case, FIGURE_DIR / "redone_realdata_application")
-        write_manifest(case, OUT_DIR / "redo_realdata_manifest.md")
-        print("\nSelected new real-data application:")
-        print(pd.DataFrame([case.to_dict()]).to_string(index=False))
-        print("\nMain application method table:")
-        main_key = (
-            confirm_method_summary["candidate"].eq(str(case["candidate"]))
-            & confirm_method_summary["window"].eq(int(case["window"]))
-            & confirm_method_summary["step"].eq(int(case["step"]))
-            & confirm_method_summary["dimension"].eq(int(case["dimension"]))
-            & confirm_method_summary["horizon"].eq(int(case["horizon"]))
-        )
-        cols = ["method", "raw_mean", "raw_se", "w2_mean", "w2_se", "n_origins"]
-        print(confirm_method_summary.loc[main_key, cols].sort_values("raw_mean").to_string(index=False))
-
-
-if __name__ == "__main__":
-    main()

@@ -1,20 +1,12 @@
-from __future__ import annotations
+"""Chronological rolling-origin evaluation for the Divvy application."""
 
-import argparse
-import json
-from pathlib import Path
-import sys
-import time
+from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[3]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from bwar.paper_jcgs.real_bwar_theory_matched import (  # noqa: E402
-    DEFAULT_OUT,
+from bwar.gaussian_geometry import project_spd
+from bwar.paper_jcgs.gaussian_models import (
     DEFAULT_RIDGE_GRID,
     bwar_gaussian_decode,
     bwar_gaussian_encode,
@@ -28,19 +20,15 @@ from bwar.paper_jcgs.real_bwar_theory_matched import (  # noqa: E402
     fit_var,
     gaussian_log_score_from_moments,
     gaussian_w2_squared,
-    iter_dataset_jobs,
     log_euclidean_decode,
     log_euclidean_encode,
     metric_mean_key,
     persistence_metrics,
-    project_spd,
     recursive_predict_z,
     score_recursive_forecasts,
-    set_reference_library_mode,
 )
 
 
-ROLLING_OUT = DEFAULT_OUT / "rolling_origin"
 PRIMARY_METRIC_DEFAULT = "domain"
 
 
@@ -975,147 +963,3 @@ def summarize_rolling(raw: pd.DataFrame, *, loss_col: str | None = None) -> tupl
         .sort_values("mean_gain", ascending=False)
     )
     return comp, summary, summary_h
-
-
-def write_outputs(
-    rows: list[pd.DataFrame],
-    ref_tables: list[pd.DataFrame],
-    *,
-    out_dir: Path,
-    tag: str,
-) -> None:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    raw = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
-    raw.to_csv(out_dir / f"raw_results_{tag}.csv", index=False)
-    if ref_tables:
-        pd.concat(ref_tables, ignore_index=True).to_csv(out_dir / f"reference_table_{tag}.csv", index=False)
-    if raw.empty:
-        return
-    comp, summary, summary_h = summarize_rolling(raw)
-    comp.to_csv(out_dir / f"comparison_{tag}.csv", index=False)
-    summary.to_csv(out_dir / f"summary_by_dataset_{tag}.csv", index=False)
-    summary_h.to_csv(out_dir / f"summary_by_dataset_horizon_{tag}.csv", index=False)
-    (out_dir / f"summary_{tag}.json").write_text(
-        json.dumps(
-            {
-                "summary_by_dataset": summary.to_dict(orient="records"),
-                "summary_by_dataset_horizon": summary_h.to_dict(orient="records"),
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Rolling-origin BWAR backtest for sequential deployment checks.")
-    parser.add_argument(
-        "--datasets",
-        choices=[
-            "uci_har",
-            "appliances",
-            "sml2010",
-            "solar_energy_hd",
-            "electricity_hd",
-            "beijing_air_hd",
-            "intel_lab",
-            "hai21",
-            "melbourne_pedestrian",
-            "room_occupancy",
-            "household_power",
-            "household_power_strong",
-            "finance_etf_hd",
-            "wpp_population_age",
-            "wpp_population_recent_age",
-            "hapt",
-            "mhealth_full",
-        ],
-        default="household_power_strong",
-    )
-    parser.add_argument("--horizons", default="1,3,5")
-    parser.add_argument("--ar-model", choices=["diag", "full"], default="diag")
-    parser.add_argument("--reference-library", choices=["full", "no_barycenter", "fast"], default="full")
-    parser.add_argument("--quick", action="store_true")
-    parser.add_argument("--max-jobs", type=int, default=0)
-    parser.add_argument("--skip-jobs", type=int, default=0)
-    parser.add_argument("--max-origins", type=int, default=3)
-    parser.add_argument("--no-raw-baseline", action="store_true")
-    parser.add_argument("--out-dir", type=Path, default=ROLLING_OUT)
-    args = parser.parse_args()
-    set_reference_library_mode(args.reference_library)
-
-    horizons = [int(x) for x in args.horizons.split(",") if x.strip()]
-    tag = (
-        f"{args.datasets}_h{'-'.join(map(str, horizons))}_{args.ar_model}"
-        f"_orig{args.max_origins}"
-        + (f"_skip{args.skip_jobs}" if args.skip_jobs else "")
-        + (f"_max{args.max_jobs}" if args.max_jobs else "")
-        + ("_quick" if args.quick else "")
-    )
-    if args.reference_library != "full":
-        tag += f"_{args.reference_library}"
-    started = time.time()
-    rows: list[pd.DataFrame] = []
-    ref_tables: list[pd.DataFrame] = []
-    n_jobs = 0
-    use_raw_baseline = not bool(args.no_raw_baseline)
-    for stream_index, payload in enumerate(
-        iter_dataset_jobs(args.datasets, quick=args.quick, return_windows=use_raw_baseline)
-    ):
-        raw_info = None
-        if len(payload) == 6:
-            job, dataset, means, covs, meta, raw_info = payload
-        else:
-            job, dataset, means, covs, meta = payload
-        if stream_index < args.skip_jobs:
-            continue
-        if args.max_jobs and n_jobs >= args.max_jobs:
-            break
-        print(
-            f"Rolling-origin {job} horizons={horizons} n={len(covs)} "
-            f"d={covs.shape[1] if len(covs) else 'NA'}...",
-            flush=True,
-        )
-        raw, refs = run_rolling_origin_series(
-            job=job,
-            dataset=dataset,
-            means=means,
-            covs=covs,
-            meta=meta,
-            horizons=horizons,
-            raw_windows=raw_info["raw_windows"] if raw_info else None,
-            window_starts=raw_info["window_starts"] if raw_info else None,
-            window_size=raw_info["window_size"] if raw_info else None,
-            ar_model=args.ar_model,
-            max_origins=args.max_origins,
-        )
-        if not raw.empty:
-            rows.append(raw)
-        if not refs.empty:
-            ref_tables.append(refs)
-        n_jobs += 1
-        write_outputs(rows, ref_tables, out_dir=args.out_dir, tag=tag)
-    write_outputs(rows, ref_tables, out_dir=args.out_dir, tag=tag)
-    metadata = {
-        "datasets": args.datasets,
-        "horizons": horizons,
-        "ar_model": args.ar_model,
-        "quick": bool(args.quick),
-        "max_origins": int(args.max_origins),
-        "raw_baseline": bool(use_raw_baseline),
-        "skip_jobs": int(args.skip_jobs),
-        "n_jobs_attempted": int(n_jobs),
-        "elapsed_seconds": round(time.time() - started, 3),
-        "out_dir": str(args.out_dir),
-        "tag": tag,
-    }
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    (args.out_dir / f"run_metadata_{tag}.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    summary_path = args.out_dir / f"summary_by_dataset_{tag}.csv"
-    if summary_path.exists():
-        print(pd.read_csv(summary_path).to_string(index=False))
-    print(json.dumps(metadata, indent=2))
-
-
-if __name__ == "__main__":
-    main()

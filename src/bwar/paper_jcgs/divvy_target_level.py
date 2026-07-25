@@ -9,9 +9,9 @@ from bwar.paper_jcgs.local_reference_bwar import (
     build_local_bwar_geometry,
     forecast_local_bwar,
 )
-import bwar.paper_jcgs.redo_realdata_application as realdata_artifacts
-import bwar.paper_jcgs.rolling_origin_backtest as rolling
-from bwar.paper_jcgs.real_bwar_theory_matched import (
+import bwar.paper_jcgs.divvy_artifacts as realdata_artifacts
+import bwar.paper_jcgs.rolling_origin as rolling
+from bwar.paper_jcgs.gaussian_models import (
     domain_loss_from_moments,
     gaussian_w2_squared,
 )
