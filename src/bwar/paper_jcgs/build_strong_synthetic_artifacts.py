@@ -153,6 +153,7 @@ def simulate_transport_linear_gaussians(
         covs[t] = project_to_spectral_shell(A_t @ ref_cov @ A_t.T, lo=0.05, hi=20.0)
 
     meta = {
+        "generating_coordinate": "bures_transport",
         "q_total": int(q_total),
         "q_cov": int(q_cov),
         "n_active_mean": int(len(active_mean)),
@@ -164,6 +165,185 @@ def simulate_transport_linear_gaussians(
         "spectral_shell_high": 20.0,
     }
     return means, covs, ref_mean, ref_cov, meta
+
+
+def simulate_log_euclidean_linear_gaussians(
+    *,
+    n: int,
+    d: int,
+    phi: float,
+    dispersion: float,
+    seed: int,
+    mean_dispersion: float = 0.03,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, object]]:
+    """Generate sparse AR dynamics in a Log-Euclidean covariance chart."""
+
+    rng = np.random.default_rng(9157 + seed)
+    ref_mean, ref_cov = random_reference(rng, d, condition=8.0)
+    q_cov = d * (d + 1) // 2
+    q_total = d + q_cov
+    active_mean, active_diag, active_offdiag = active_coordinate_sets(
+        d,
+        rng,
+        active_fraction=0.35,
+    )
+    active_cov = np.r_[active_diag, active_offdiag]
+    active_total = np.r_[active_mean, d + active_cov]
+
+    slopes = np.zeros(q_total, dtype=float)
+    slopes[active_total] = np.clip(
+        phi * rng.uniform(0.985, 1.015, size=len(active_total)),
+        0.05,
+        0.985,
+    )
+    stationary_sd = np.full(q_total, 0.002, dtype=float)
+    stationary_sd[active_mean] = mean_dispersion
+    stationary_sd[d + active_cov] = dispersion
+    innovation = stationary_sd * np.sqrt(
+        np.maximum(1.0 - slopes**2, 0.05)
+    )
+
+    coordinates = np.zeros((n, q_total), dtype=float)
+    coordinates[0] = rng.normal(scale=stationary_sd)
+    for index in range(1, n):
+        coordinates[index] = (
+            slopes * coordinates[index - 1]
+            + rng.normal(scale=innovation)
+        )
+
+    reference_log_covariance = mat_log(ref_cov)
+    means = np.empty((n, d), dtype=float)
+    covariances = np.empty((n, d, d), dtype=float)
+    for index in range(n):
+        means[index] = ref_mean + coordinates[index, :d]
+        log_increment = mat_from_triu(coordinates[index, d:], d)
+        covariances[index] = project_to_spectral_shell(
+            mat_exp(reference_log_covariance + log_increment),
+            lo=0.05,
+            hi=20.0,
+        )
+
+    metadata = {
+        "generating_coordinate": "log_euclidean",
+        "q_total": int(q_total),
+        "q_cov": int(q_cov),
+        "n_active_mean": int(len(active_mean)),
+        "n_active_diag": int(len(active_diag)),
+        "n_active_offdiag": int(len(active_offdiag)),
+        "reference_condition": 8.0,
+        "mean_dispersion": float(mean_dispersion),
+        "spectral_shell_low": 0.05,
+        "spectral_shell_high": 20.0,
+    }
+    return means, covariances, ref_mean, ref_cov, metadata
+
+
+def simulate_cholesky_linear_gaussians(
+    *,
+    n: int,
+    d: int,
+    phi: float,
+    dispersion: float,
+    seed: int,
+    mean_dispersion: float = 0.03,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, object]]:
+    """Generate sparse AR dynamics in log-diagonal Cholesky coordinates."""
+
+    rng = np.random.default_rng(9157 + seed)
+    ref_mean, ref_cov = random_reference(rng, d, condition=8.0)
+    lower_rows, lower_cols = np.tril_indices(d)
+    diagonal_positions = np.flatnonzero(lower_rows == lower_cols)
+    off_diagonal_positions = np.flatnonzero(lower_rows != lower_cols)
+    q_cov = len(lower_rows)
+    q_total = d + q_cov
+
+    n_active_mean = max(2, int(np.ceil(0.35 * d)))
+    n_active_diagonal = max(
+        2,
+        int(np.ceil(0.35 * len(diagonal_positions))),
+    )
+    n_active_off_diagonal = max(
+        4,
+        int(np.ceil(0.35 * len(off_diagonal_positions))),
+    )
+    active_mean = rng.choice(
+        np.arange(d),
+        size=min(n_active_mean, d),
+        replace=False,
+    )
+    active_diagonal = rng.choice(
+        diagonal_positions,
+        size=min(n_active_diagonal, len(diagonal_positions)),
+        replace=False,
+    )
+    active_off_diagonal = rng.choice(
+        off_diagonal_positions,
+        size=min(n_active_off_diagonal, len(off_diagonal_positions)),
+        replace=False,
+    )
+    active_covariance = np.r_[active_diagonal, active_off_diagonal]
+    active_total = np.r_[active_mean, d + active_covariance]
+
+    slopes = np.zeros(q_total, dtype=float)
+    slopes[active_total] = np.clip(
+        phi * rng.uniform(0.985, 1.015, size=len(active_total)),
+        0.05,
+        0.985,
+    )
+    stationary_sd = np.full(q_total, 0.002, dtype=float)
+    stationary_sd[active_mean] = mean_dispersion
+    stationary_sd[d + active_covariance] = dispersion
+    innovation_sd = stationary_sd * np.sqrt(
+        np.maximum(1.0 - slopes**2, 0.05)
+    )
+
+    coordinates = np.zeros((n, q_total), dtype=float)
+    coordinates[0] = rng.normal(scale=stationary_sd)
+    for index in range(1, n):
+        coordinates[index] = (
+            slopes * coordinates[index - 1]
+            + rng.normal(scale=innovation_sd)
+        )
+
+    reference_cholesky_coordinate = cholesky_encode(
+        ref_mean,
+        ref_cov,
+    )[d:]
+    means = np.empty((n, d), dtype=float)
+    covariances = np.empty((n, d, d), dtype=float)
+    shell_clip_count = 0
+    for index in range(n):
+        means[index] = ref_mean + coordinates[index, :d]
+        _, raw_covariance = cholesky_decode(
+            np.r_[
+                means[index],
+                reference_cholesky_coordinate + coordinates[index, d:],
+            ],
+            d,
+        )
+        eigenvalues = np.linalg.eigvalsh(raw_covariance)
+        if float(eigenvalues.min()) < 0.05 or float(eigenvalues.max()) > 20.0:
+            shell_clip_count += 1
+        covariances[index] = project_to_spectral_shell(
+            raw_covariance,
+            lo=0.05,
+            hi=20.0,
+        )
+
+    metadata = {
+        "generating_coordinate": "cholesky",
+        "q_total": int(q_total),
+        "q_cov": int(q_cov),
+        "n_active_mean": int(len(active_mean)),
+        "n_active_diag": int(len(active_diagonal)),
+        "n_active_offdiag": int(len(active_off_diagonal)),
+        "reference_condition": 8.0,
+        "mean_dispersion": float(mean_dispersion),
+        "spectral_shell_low": 0.05,
+        "spectral_shell_high": 20.0,
+        "generator_shell_clip_rate": float(shell_clip_count / n),
+    }
+    return means, covariances, ref_mean, ref_cov, metadata
 
 
 def gaussian_w2_squared(mean_a: np.ndarray, cov_a: np.ndarray, mean_b: np.ndarray, cov_b: np.ndarray) -> tuple[float, float, float]:
@@ -364,8 +544,20 @@ def run_setting(
     dispersion: float,
     seed: int,
     ar_model: str = "diag",
+    generating_coordinate: str = "bures_transport",
 ) -> pd.DataFrame:
-    means, covs, ref_mean, ref_cov, meta = simulate_transport_linear_gaussians(
+    generators = {
+        "bures_transport": simulate_transport_linear_gaussians,
+        "log_euclidean": simulate_log_euclidean_linear_gaussians,
+        "cholesky": simulate_cholesky_linear_gaussians,
+    }
+    if generating_coordinate not in generators:
+        raise ValueError(
+            f"unknown generating coordinate: {generating_coordinate}"
+        )
+    means, covs, ref_mean, ref_cov, meta = generators[
+        generating_coordinate
+    ](
         n=n,
         d=d,
         phi=phi,
@@ -461,6 +653,22 @@ def default_settings() -> list[dict[str, object]]:
         {"design": "Higher dimension", "n": 320, "d": 10, "phi": 0.70, "dispersion": 0.32},
         {"design": "Weaker dynamics", "n": 320, "d": 8, "phi": 0.50, "dispersion": 0.35},
         {"design": "Larger variation", "n": 320, "d": 8, "phi": 0.70, "dispersion": 0.50},
+        {
+            "design": "Log-Euclidean mechanism",
+            "n": 320,
+            "d": 8,
+            "phi": 0.70,
+            "dispersion": 0.35,
+            "generating_coordinate": "log_euclidean",
+        },
+        {
+            "design": "Cholesky mechanism",
+            "n": 320,
+            "d": 8,
+            "phi": 0.70,
+            "dispersion": 0.35,
+            "generating_coordinate": "cholesky",
+        },
     ]
 
 
@@ -492,10 +700,9 @@ def write_main_table(summary: pd.DataFrame, path: Path) -> None:
         r"\centering",
         r"\caption{Transport-linear Gaussian simulation. Entries are mean test-loss ratios to persistence over 50 replications, with standard errors in parentheses. Lower values are better. The design uses \(d=8\), \(T=320\), a non-identity Bures reference, and diagonal ridge Yule--Walker AR(1) fits.}",
         r"\label{tab:synthetic-transport-main}",
-        r"\resizebox{0.84\linewidth}{!}{%",
-        r"\begin{tabular}{lrrr}",
+        r"\begin{tabular}{lrr}",
         r"\toprule",
-        r"Method & Full \(W_2^2\) ratio & Covariance ratio & Minimum predicted eigenvalue \\",
+        r"Method & Full \(W_2^2\) ratio & Covariance ratio \\",
         r"\midrule",
     ]
     for full, method, _, _ in METHODS:
@@ -503,20 +710,27 @@ def write_main_table(summary: pd.DataFrame, path: Path) -> None:
         lines.append(
             f"{full} & "
             f"{fmt_mean_se(float(row['w2_ratio_mean']), float(row['w2_ratio_se']), best=best_w2)} & "
-            f"{fmt_mean_se(float(row['cov_ratio_mean']), float(row['cov_ratio_se']), best=best_cov)} & "
-            f"{float(row['min_pred_eig']):.3g} \\\\"
+            f"{fmt_mean_se(float(row['cov_ratio_mean']), float(row['cov_ratio_se']), best=best_cov)} \\\\"
         )
-    lines.extend([r"\bottomrule", r"\end{tabular}", r"}", r"\end{table}"])
+    lines.extend([r"\bottomrule", r"\end{tabular}", r"\end{table}"])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def write_variation_table(summary: pd.DataFrame, path: Path) -> None:
-    designs = ["Baseline", "Shorter series", "Higher dimension", "Weaker dynamics", "Larger variation"]
+    designs = [
+        "Baseline",
+        "Shorter series",
+        "Higher dimension",
+        "Weaker dynamics",
+        "Larger variation",
+        "Log-Euclidean mechanism",
+        "Cholesky mechanism",
+    ]
     method_codes = ["euclidean_gaussian_ar", "cholesky_gaussian_ar", "log_euclidean_gaussian_ar", "bwar_barycenter"]
     lines = [
         r"\begin{table}[H]",
         r"\centering",
-        r"\caption{Parameter variation for the transport-linear Gaussian simulation. Entries are full \(W_2^2\) loss ratios to persistence, reported as mean (standard error) over 50 replications.}",
+        r"\caption{Parameter and generating-coordinate variations for the Gaussian simulation. Entries are full \(W_2^2\) loss ratios to persistence, reported as mean (standard error) over 50 replications. The first five rows use the Bures transport generator; the final two rows use Log-Euclidean and log-diagonal Cholesky covariance coordinates, respectively. Lower values are better.}",
         r"\label{tab:synthetic-transport-variation}",
         r"\resizebox{\linewidth}{!}{%",
         r"\begin{tabular}{lrrrrrrrr}",
@@ -640,7 +854,9 @@ def make_figure(raw: pd.DataFrame, summary: pd.DataFrame, path_stem: Path) -> No
     x = np.arange(len(designs))
     offsets = np.linspace(-0.27, 0.27, len(PLOT_METHODS))
     for off, method in zip(offsets, PLOT_METHODS):
-        part = summary.loc[summary["method"].eq(method)].copy()
+        part = summary.loc[
+            summary["method"].eq(method) & summary["design"].isin(designs)
+        ].copy()
         part["design"] = pd.Categorical(part["design"], categories=designs, ordered=True)
         part = part.sort_values("design")
         ax_var.errorbar(

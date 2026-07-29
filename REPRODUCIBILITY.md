@@ -6,11 +6,11 @@ Commands are run from the repository root after `make install`.
 |---|---|---|---|
 | Figure 3 | fixed simulation summary | `make figures` | `artifacts/generated/figures/synthetic_transport_mechanism.pdf` |
 | Figure 4 | rolling-drift results | `make figures` | `artifacts/generated/figures/rolling_refit_reference_shift.pdf` |
-| Figure 5 | Divvy summaries | `make figures` | `artifacts/generated/figures/redone_realdata_application.pdf` |
+| Figure 5 | descriptive Divvy structure | `make data-figure` | `artifacts/generated/figures/divvy_data_background.pdf` |
+| Figure 6 | Divvy forecast summaries | `make figures` | `artifacts/generated/figures/redone_realdata_application.pdf` |
 | Tables 2--3 | fixed simulation summary | `make figures` | `artifacts/generated/tables/synthetic_transport_*.tex` |
-| Table 4 | archived frozen artifact | `make figures` | `artifacts/generated/tables/local_reference_shift_main.tex` |
-| Table 5 | rolling-drift summary | `make figures` | `artifacts/generated/tables/rolling_refit_reference_shift.tex` |
-| Tables 6--8 | Divvy summaries | `make figures` | `artifacts/generated/tables/redone_realdata_*.tex` |
+| Table 4 | rolling-drift summary | `make figures` | `artifacts/generated/tables/rolling_refit_reference_shift.tex` |
+| Tables 5--6 | Divvy summaries | `make figures` | `artifacts/generated/tables/redone_realdata_*.tex` |
 
 ## Full simulation rerun
 
@@ -18,18 +18,15 @@ Commands are run from the repository root after `make install`.
 make simulations
 ```
 
-This runs 50 independent replications of the fixed-reference mechanism study
-and 50 independent replications of the rolling-refit reference-drift study.
+This runs 50 independent replications of the fixed-reference Bures,
+Log-Euclidean, and Cholesky generating mechanisms, 50 independent replications
+of the rolling-refit reference-drift study, and its prespecified gradual-drift
+strength grid.
 For a quick implementation check:
 
 ```bash
 make smoke
 ```
-
-The ten-replication frozen-chart stress test in Table 4 predates the final
-replication pipeline. Its accepted table is archived with an explicit
-provenance note in `results/reference/frozen_drift/`; the original raw
-generator is not represented as available.
 
 ## Full Divvy rerun
 

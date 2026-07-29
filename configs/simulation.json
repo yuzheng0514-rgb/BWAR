@@ -7,6 +7,14 @@
       "phi": 0.70,
       "dispersion": 0.35,
       "ar_model": "diagonal ridge Yule-Walker AR(1)"
+    },
+    "alternative_coordinates": {
+      "generating_coordinates": ["Log-Euclidean", "Cholesky"],
+      "n": 320,
+      "dimension": 8,
+      "phi": 0.70,
+      "dispersion": 0.35,
+      "ar_model": "diagonal ridge Yule-Walker AR(1)"
     }
   },
   "rolling_reference_drift": {
@@ -20,6 +28,9 @@
     "validation_fraction": 0.20,
     "reference_iterations": 3,
     "refresh_period": 12,
+    "gradual_drift_strengths": [0.0, 0.5, 1.0, 1.5],
+    "mean_drift_scale": 0.35,
+    "covariance_drift_scale": 0.80,
     "coordinate_model": "diagonal ridge Yule-Walker AR(1)"
   }
 }

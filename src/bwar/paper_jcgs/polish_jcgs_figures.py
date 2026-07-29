@@ -36,7 +36,6 @@ SYNTHETIC_METHODS = [
 REAL_METHODS = [
     "persistence",
     "raw_var_window_ar",
-    "seasonal_window_naive",
     "euclidean_gaussian_ar",
     "cholesky_gaussian_ar",
     "log_euclidean_gaussian_ar",
@@ -61,7 +60,6 @@ SYNTHETIC_MAIN_DISPLAY = "mean_se"
 METHOD_LABEL = {
     "persistence": "Pers.",
     "raw_var_window_ar": "Raw VAR",
-    "seasonal_window_naive": "Seasonal",
     "euclidean_gaussian_ar": "Euc.",
     "cholesky_gaussian_ar": "Chol.",
     "log_euclidean_gaussian_ar": "LogEuc.",
@@ -73,7 +71,6 @@ METHOD_LABEL = {
 METHOD_COLOR = {
     "persistence": "#7F7F7F",
     "raw_var_window_ar": "#FF7F0E",
-    "seasonal_window_naive": "#17BECF",
     "euclidean_gaussian_ar": "#111111",
     "cholesky_gaussian_ar": "#9467BD",
     "log_euclidean_gaussian_ar": "#1F77B4",
@@ -85,7 +82,6 @@ METHOD_COLOR = {
 METHOD_MARKER = {
     "persistence": "o",
     "raw_var_window_ar": "s",
-    "seasonal_window_naive": "^",
     "euclidean_gaussian_ar": "o",
     "cholesky_gaussian_ar": "D",
     "log_euclidean_gaussian_ar": "v",
@@ -97,7 +93,6 @@ METHOD_MARKER = {
 METHOD_LINESTYLE = {
     "persistence": (0, (2, 2)),
     "raw_var_window_ar": (0, (4, 2)),
-    "seasonal_window_naive": (0, (1, 2)),
     "euclidean_gaussian_ar": "-",
     "cholesky_gaussian_ar": (0, (6, 2)),
     "log_euclidean_gaussian_ar": (0, (2, 1, 1, 1)),
@@ -318,7 +313,9 @@ def make_synthetic_figure() -> None:
     x = np.arange(len(designs))
     offsets = np.linspace(-0.14, 0.14, len(SYNTHETIC_METHODS))
     for off, method in zip(offsets, SYNTHETIC_METHODS, strict=True):
-        part = summary.loc[summary["method"].eq(method)].copy()
+        part = summary.loc[
+            summary["method"].eq(method) & summary["design"].isin(designs)
+        ].copy()
         part["design"] = pd.Categorical(part["design"], categories=designs, ordered=True)
         part = part.sort_values("design")
         ax_var.errorbar(

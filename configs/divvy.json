@@ -7,7 +7,7 @@
   "stations": 30,
   "window_hours": 72,
   "step_hours": 24,
-  "horizons": [3, 4, 6],
+  "horizons": [3, 4],
   "rolling_origins": 5,
   "coordinate_model": "full ridge Yule-Walker VAR(1)",
   "local_reference_windows": [24, 48, 72],

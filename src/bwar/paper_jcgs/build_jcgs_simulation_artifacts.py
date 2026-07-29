@@ -53,6 +53,7 @@ DRIFT_SETTINGS = (
     "Joint shift",
     "Gradual joint shift",
 )
+DRIFT_STRENGTHS = (0.0, 0.5, 1.0, 1.5)
 DRIFT_METHOD_ORDER = (
     "persistence",
     "euclidean",
@@ -543,12 +544,58 @@ def run_reference_drift_experiment(reps: int) -> tuple[pd.DataFrame, pd.DataFram
     return raw, summarize_reference_drift(raw)
 
 
+def run_reference_drift_strength_experiment(
+    reps: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if reps < 1:
+        raise ValueError("reps must be positive")
+    frames = []
+    for strength in DRIFT_STRENGTHS:
+        print(f"[drift strength] multiplier={strength:g}: reps={reps}", flush=True)
+        for seed in range(reps):
+            result = run_reference_drift_setting(
+                setting="Gradual joint shift",
+                seed=seed,
+                mean_shift_strength=0.35 * strength,
+                covariance_shift_strength=0.80 * strength,
+            )
+            result.insert(0, "drift_strength", float(strength))
+            frames.append(result)
+    raw = pd.concat(frames, ignore_index=True)
+    return raw, summarize_reference_drift_strength(raw)
+
+
 def summarize_reference_drift(raw: pd.DataFrame) -> pd.DataFrame:
     required = {"setting", "seed", "method", "w2_ratio_mean", "min_pred_eig"}
     if not isinstance(raw, pd.DataFrame) or not required.issubset(raw.columns):
         raise ValueError("raw drift results use an invalid schema")
     return (
         raw.groupby(["setting", "method"], as_index=False, sort=False)
+        .agg(
+            n_rep=("seed", "nunique"),
+            w2_ratio_mean=("w2_ratio_mean", "mean"),
+            w2_ratio_se=("w2_ratio_mean", _standard_error),
+            min_pred_eig=("min_pred_eig", "min"),
+        )
+    )
+
+
+def summarize_reference_drift_strength(raw: pd.DataFrame) -> pd.DataFrame:
+    required = {
+        "drift_strength",
+        "seed",
+        "method",
+        "w2_ratio_mean",
+        "min_pred_eig",
+    }
+    if not isinstance(raw, pd.DataFrame) or not required.issubset(raw.columns):
+        raise ValueError("raw drift-strength results use an invalid schema")
+    return (
+        raw.groupby(
+            ["drift_strength", "method"],
+            as_index=False,
+            sort=True,
+        )
         .agg(
             n_rep=("seed", "nunique"),
             w2_ratio_mean=("w2_ratio_mean", "mean"),
@@ -750,7 +797,9 @@ def make_fixed_reference_figure(
     y_positions = np.arange(len(designs))
     offsets = np.linspace(-0.18, 0.18, len(_FIXED_PLOT_METHODS))
     for offset, method in zip(offsets, _FIXED_PLOT_METHODS, strict=True):
-        part = summary.loc[summary["method"].eq(method)].copy()
+        part = summary.loc[
+            summary["method"].eq(method) & summary["design"].isin(designs)
+        ].copy()
         part["design"] = pd.Categorical(part["design"], categories=designs, ordered=True)
         part = part.sort_values("design")
         axis_variation.errorbar(
@@ -798,17 +847,22 @@ def make_fixed_reference_figure(
 def make_reference_drift_figure(
     raw: pd.DataFrame,
     summary: pd.DataFrame,
+    strength_summary: pd.DataFrame,
     path_stem: Path,
 ) -> None:
     plt = _setup_matplotlib()
-    fig, (axis_summary, axis_difference) = plt.subplots(
+    fig, axes = plt.subplots(
         1,
-        2,
+        3,
         figsize=(7.1, 3.0),
-        gridspec_kw={"width_ratios": (1.22, 1.0), "wspace": 0.38},
+        gridspec_kw={
+            "width_ratios": (1.48, 0.86, 1.0),
+            "wspace": 0.34,
+        },
     )
-    _set_opaque_canvas(fig, (axis_summary, axis_difference))
-    _make_backgrounds_opaque(fig, (axis_summary, axis_difference))
+    axis_summary, axis_difference, axis_strength = axes
+    _set_opaque_canvas(fig, tuple(axes))
+    _make_backgrounds_opaque(fig, tuple(axes))
     plotted_methods = DRIFT_METHOD_ORDER[1:]
     y_positions = np.arange(len(DRIFT_SETTINGS))
     offsets = np.linspace(-0.18, 0.18, len(plotted_methods))
@@ -834,11 +888,19 @@ def make_reference_drift_figure(
         )
     axis_summary.axvline(1.0, color="#8C8C8C", lw=0.65, ls=(0, (4, 2)))
     axis_summary.set_yticks(y_positions)
-    axis_summary.set_yticklabels(("No shift", "Mean shift", "Covariance shift", "Joint shift", "Gradual joint shift"))
+    axis_summary.set_yticklabels(
+        (
+            "No shift",
+            "Mean shift",
+            "Covariance shift",
+            "Joint shift",
+            "Gradual joint shift",
+        )
+    )
     axis_summary.invert_yaxis()
     axis_summary.set_xlabel(r"Full $W_2^2$ ratio")
     axis_summary.set_xlim(0.905, 1.005)
-    axis_summary.set_title("Reference-shift stress test: mean (SE)")
+    axis_summary.set_title("Reference-shift performance")
     axis_summary.grid(axis="x", color="#E7E7E7", lw=0.38)
 
     paired = raw.pivot(index=["setting", "seed"], columns="method", values="w2_ratio_mean").reset_index()
@@ -863,13 +925,41 @@ def make_reference_drift_figure(
         box.set_facecolor("#F6DEDE")
     axis_difference.axvline(0.0, color="#8C8C8C", lw=0.65, ls=(0, (4, 2)))
     axis_difference.set_yticks(y_positions)
-    axis_difference.set_yticklabels(("No shift", "Mean shift", "Covariance shift", "Joint shift", "Gradual joint shift"))
-    axis_difference.invert_yaxis()
-    axis_difference.set_xlabel("Local BWAR - Fixed BWAR")
-    axis_difference.set_title("Paired replication contrast")
+    axis_difference.set_yticklabels(())
+    axis_difference.set_ylim(axis_summary.get_ylim())
+    axis_difference.set_xlim(-0.025, 0.015)
+    axis_difference.set_xlabel("Local - fixed BWAR")
+    axis_difference.set_title("Paired contrast")
     axis_difference.grid(axis="x", color="#E7E7E7", lw=0.38)
 
-    for label, axis in zip("ab", (axis_summary, axis_difference), strict=True):
+    for method in ("fixed_bwar", "local_bwar"):
+        part = (
+            strength_summary.loc[strength_summary["method"].eq(method)]
+            .sort_values("drift_strength")
+        )
+        x = part["drift_strength"].to_numpy(float)
+        axis_strength.errorbar(
+            x,
+            part["w2_ratio_mean"].to_numpy(float),
+            yerr=part["w2_ratio_se"].to_numpy(float),
+            color=_COLOR[method],
+            marker=_MARKER[method],
+            linestyle="-",
+            ms=3.7,
+            lw=1.15,
+            elinewidth=0.65,
+            capsize=1.6,
+            zorder=2,
+        )
+    axis_strength.set_xticks(x)
+    axis_strength.set_xlim(-0.08, 1.58)
+    axis_strength.set_ylim(0.915, 0.972)
+    axis_strength.set_xlabel("Drift-strength multiplier")
+    axis_strength.set_ylabel(r"Full $W_2^2$ ratio")
+    axis_strength.set_title("Gradual joint drift")
+    axis_strength.grid(axis="y", color="#E7E7E7", lw=0.38)
+
+    for label, axis in zip("abc", axes, strict=True):
         _panel_label(axis, label)
         axis.set_axisbelow(True)
     handles, labels = axis_summary.get_legend_handles_labels()
@@ -879,10 +969,15 @@ def make_reference_drift_figure(
         loc="lower center",
         bbox_to_anchor=(0.5, -0.01),
         ncol=5,
-        handlelength=2.0,
-        columnspacing=1.0,
+        handlelength=1.75,
+        columnspacing=0.80,
     )
-    fig.subplots_adjust(bottom=0.25, top=0.90)
+    fig.subplots_adjust(
+        left=0.125,
+        right=0.985,
+        bottom=0.25,
+        top=0.89,
+    )
     _save_figure(fig, path_stem)
     plt.close(fig)
 
@@ -894,7 +989,7 @@ def _format_mean_se(mean: float, standard_error: float, best: float) -> str:
 
 def write_reference_drift_table(summary: pd.DataFrame, path: Path, reps: int) -> None:
     lines = [
-        r"\begin{table}[H]",
+        r"\begin{table}[!htbp]",
         r"\centering",
         (
             r"\caption{Reference-shift performance under rolling coefficient "
@@ -956,6 +1051,14 @@ def build_all(
     drift_raw, drift_summary = run_reference_drift_experiment(drift_reps)
     drift_raw.to_csv(DRIFT_OUT_DIR / "local_reference_drift_raw.csv", index=False)
     drift_summary.to_csv(DRIFT_OUT_DIR / "local_reference_drift_summary.csv", index=False)
+    strength_raw, strength_summary = run_reference_drift_strength_experiment(
+        drift_reps
+    )
+    strength_raw.to_csv(DRIFT_OUT_DIR / "drift_strength_raw.csv", index=False)
+    strength_summary.to_csv(
+        DRIFT_OUT_DIR / "drift_strength_summary.csv",
+        index=False,
+    )
     write_reference_drift_table(
         drift_summary,
         table_dir / "rolling_refit_reference_shift.tex",
@@ -964,6 +1067,7 @@ def build_all(
     make_reference_drift_figure(
         drift_raw,
         drift_summary,
+        strength_summary,
         figure_dir / "rolling_refit_reference_shift",
     )
 
