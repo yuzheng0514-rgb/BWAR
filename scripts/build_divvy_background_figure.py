@@ -200,7 +200,6 @@ def _build_figure(
 ) -> None:
     plt = _setup_matplotlib()
     import matplotlib.dates as mdates
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     weekly_dates = (
         weekly[["week_start", "station_rank"]]
@@ -228,6 +227,12 @@ def _build_figure(
     ax_daily = fig.add_subplot(grid[0, :])
     ax_station = fig.add_subplot(grid[1, :3])
     ax_dependence = fig.add_subplot(grid[1, 3:])
+    fig.subplots_adjust(
+        left=0.075,
+        right=0.88,
+        top=0.95,
+        bottom=0.22,
+    )
 
     dates = pd.to_datetime(daily["date"])
     daily_values = daily["daily_departures"].to_numpy(float)
@@ -302,14 +307,16 @@ def _build_figure(
     ax_station.tick_params(length=0)
     for spine in ax_station.spines.values():
         spine.set_visible(False)
-    station_cax = inset_axes(
-        ax_station,
-        width="62%",
-        height="4.5%",
-        loc="lower center",
-        bbox_to_anchor=(0.0, -0.30, 1.0, 1.0),
-        bbox_transform=ax_station.transAxes,
-        borderpad=0.0,
+    # Use a figure-coordinate axes so the horizontal colorbar's QuadMesh,
+    # outline, and ticks share one transform in vector PDF output.
+    station_position = ax_station.get_position()
+    station_cax = fig.add_axes(
+        [
+            station_position.x0 + 0.19 * station_position.width,
+            station_position.y0 - 0.27 * station_position.height,
+            0.62 * station_position.width,
+            0.045 * station_position.height,
+        ]
     )
     station_colorbar = fig.colorbar(
         station_image,
@@ -340,33 +347,21 @@ def _build_figure(
     ax_dependence.tick_params(length=0, pad=1.0)
     for spine in ax_dependence.spines.values():
         spine.set_visible(False)
-    dependence_cax = inset_axes(
-        ax_dependence,
-        width="4.5%",
-        height="78%",
-        loc="center right",
-        bbox_to_anchor=(0.12, 0.0, 1.0, 1.0),
-        bbox_transform=ax_dependence.transAxes,
-        borderpad=0.0,
-    )
     dependence_colorbar = fig.colorbar(
         dependence_image,
-        cax=dependence_cax,
+        ax=ax_dependence,
         orientation="vertical",
+        fraction=0.05,
+        pad=0.04,
+        shrink=0.78,
     )
     dependence_colorbar.set_label("Correlation distance", labelpad=2.0)
     dependence_colorbar.outline.set_linewidth(0.4)
     _panel_label(ax_dependence, "c", x=-0.12)
 
-    fig.subplots_adjust(
-        left=0.075,
-        right=0.935,
-        top=0.95,
-        bottom=0.16,
-    )
     figure_stem.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(figure_stem.with_suffix(".svg"), bbox_inches="tight")
-    fig.savefig(figure_stem.with_suffix(".pdf"), bbox_inches="tight")
+    fig.savefig(figure_stem.with_suffix(".pdf"))
     fig.savefig(figure_stem.with_suffix(".tiff"), dpi=600, bbox_inches="tight")
     fig.savefig(figure_stem.with_suffix(".png"), dpi=600, bbox_inches="tight")
     plt.close(fig)
