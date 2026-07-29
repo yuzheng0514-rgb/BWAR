@@ -12,8 +12,8 @@ from bwar.paper_jcgs import build_jcgs_simulation_artifacts as simulation
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Run the transport-linear and rolling-refit reference-drift "
-            "simulations."
+            "Run the transport-linear, alternative-coordinate, and "
+            "rolling-refit reference-drift simulations."
         )
     )
     parser.add_argument("--fixed-reps", type=int, default=50)

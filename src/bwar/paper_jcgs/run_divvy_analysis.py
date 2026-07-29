@@ -35,7 +35,7 @@ MONTHS = tuple(f"2024{month:02d}" for month in range(1, 13))
 WINDOW = 72
 STEP = 24
 DIMENSION = 30
-HORIZONS = (3, 4, 6)
+HORIZONS = (3, 4)
 MAX_MATRICES = 2000
 MAX_ORIGINS = 6
 BOOTSTRAP_BLOCK_LENGTH = 3
@@ -46,7 +46,6 @@ DEFAULT_OUT = ROOT / "results" / "generated" / "divvy"
 TARGET_METHODS = (
     "persistence",
     "raw_var_window_ar",
-    "seasonal_window_naive",
     "euclidean_gaussian_ar",
     "cholesky_gaussian_ar",
     "log_euclidean_gaussian_ar",
@@ -94,10 +93,8 @@ def build_target_level_evidence(
     means: np.ndarray,
     covariances: np.ndarray,
     raw_series: np.ndarray,
-    raw_windows: np.ndarray,
     starts: np.ndarray,
     window_size: int,
-    seasonal_period: int,
     splits: tuple[tuple[int, int, int], ...] | list[tuple[int, int, int]],
     horizons: tuple[int, ...],
     domain_profile: dict[str, object],
@@ -109,10 +106,8 @@ def build_target_level_evidence(
         means,
         covariances,
         raw_series=raw_series,
-        raw_windows=raw_windows,
         window_starts=starts,
         window_size=window_size,
-        seasonal_period_windows=seasonal_period,
         splits=splits,
         horizons=horizons,
         domain_profile=domain_profile,
@@ -125,7 +120,6 @@ def build_target_level_evidence(
         comparators=(
             "persistence",
             "raw_var_window_ar",
-            "seasonal_window_naive",
             "euclidean_gaussian_ar",
             "cholesky_gaussian_ar",
             "log_euclidean_gaussian_ar",
@@ -325,10 +319,6 @@ def protocol_job_name(*, window: int, step: int, dimension: int) -> str:
     return f"divvy_2024_w{window}_s{step}_d{dimension}"
 
 
-def seasonal_period_windows(*, step: int) -> int:
-    return 24 // step if step > 0 and 24 % step == 0 else 0
-
-
 def monthly_h2_splits(
     starts: np.ndarray,
     *,
@@ -517,7 +507,6 @@ def run(out_dir: Path, *, h2_monthly: bool = False) -> None:
         "step": STEP,
         "months": ",".join(MONTHS),
         "physical_units": "training-standardized",
-        "seasonal_period_windows": seasonal_period_windows(step=STEP),
         "station_selection_block": "first_origin_fit",
         "standardization_block": "first_origin_fit",
         "evaluation_protocol": "monthly_h2_confirmation" if h2_monthly else "fractional_rolling_origin",
@@ -558,10 +547,8 @@ def run(out_dir: Path, *, h2_monthly: bool = False) -> None:
         means=means,
         covariances=covs,
         raw_series=raw_series,
-        raw_windows=raw_windows,
         starts=starts,
         window_size=WINDOW,
-        seasonal_period=seasonal_period_windows(step=STEP),
         splits=tuple(splits),
         horizons=HORIZONS,
         domain_profile=profile,

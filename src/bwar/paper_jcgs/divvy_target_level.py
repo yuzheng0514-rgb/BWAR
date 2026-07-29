@@ -662,10 +662,8 @@ def evaluate_fixed_split(
     covariances: np.ndarray,
     *,
     raw_series: np.ndarray,
-    raw_windows: np.ndarray,
     window_starts: np.ndarray,
     window_size: int,
-    seasonal_period_windows: int,
     origin: int,
     fit_end: int,
     val_end: int,
@@ -676,10 +674,9 @@ def evaluate_fixed_split(
 ) -> pd.DataFrame:
     mean_array, covariance_array = _validated_gaussian_series(means, covariances)
     raw_array = np.asarray(raw_series, dtype=float)
-    windows = np.asarray(raw_windows, dtype=float)
     starts = np.asarray(window_starts, dtype=int)
-    if windows.shape[0] != len(mean_array) or len(starts) != len(mean_array):
-        raise ValueError("raw windows and starts must match the Gaussian series")
+    if len(starts) != len(mean_array):
+        raise ValueError("window starts must match the Gaussian series")
     if raw_array.ndim != 2 or raw_array.shape[1] != mean_array.shape[1]:
         raise ValueError("raw_series must match the Gaussian dimension")
     sources = test_source_indices(val_end, test_end, horizon=horizon)
@@ -740,34 +737,6 @@ def evaluate_fixed_split(
         method="raw_var_window_ar",
         window_length=window_size,
         ridge=raw_ridge,
-        domain_profile=domain_profile,
-    )
-
-    def seasonal_forecast(source: int) -> tuple[np.ndarray, np.ndarray]:
-        target_index = source + int(horizon)
-        seasonal_source = rolling._seasonal_source_index(
-            target_index,
-            source,
-            int(seasonal_period_windows),
-        )
-        if seasonal_source is None:
-            raise ValueError("seasonal baseline has no observable source window")
-        return rolling._window_moments(windows[seasonal_source])
-
-    _append_target_forecasts(
-        rows,
-        means=mean_array,
-        covariances=covariance_array,
-        sources=sources,
-        forecast=seasonal_forecast,
-        origin=origin,
-        fit_end=fit_end,
-        val_end=val_end,
-        test_end=test_end,
-        horizon=horizon,
-        method="seasonal_window_naive",
-        window_length=window_size,
-        ridge=np.nan,
         domain_profile=domain_profile,
     )
 
@@ -885,7 +854,6 @@ def evaluate_fixed_split(
     methods = (
         "persistence",
         "raw_var_window_ar",
-        "seasonal_window_naive",
         "euclidean_gaussian_ar",
         "cholesky_gaussian_ar",
         "log_euclidean_gaussian_ar",
@@ -899,10 +867,8 @@ def evaluate_target_panel(
     covariances: np.ndarray,
     *,
     raw_series: np.ndarray,
-    raw_windows: np.ndarray,
     window_starts: np.ndarray,
     window_size: int,
-    seasonal_period_windows: int,
     splits: tuple[tuple[int, int, int], ...] | list[tuple[int, int, int]],
     horizons: tuple[int, ...],
     domain_profile: Mapping[str, object],
@@ -931,10 +897,8 @@ def evaluate_target_panel(
                 mean_array,
                 covariance_array,
                 raw_series=raw_series,
-                raw_windows=raw_windows,
                 window_starts=window_starts,
                 window_size=window_size,
-                seasonal_period_windows=seasonal_period_windows,
                 origin=origin,
                 fit_end=fit_end,
                 val_end=val_end,
@@ -959,7 +923,6 @@ def evaluate_target_panel(
             methods = (
                 "persistence",
                 "raw_var_window_ar",
-                "seasonal_window_naive",
                 "euclidean_gaussian_ar",
                 "cholesky_gaussian_ar",
                 "log_euclidean_gaussian_ar",

@@ -14,7 +14,6 @@ from bwar.gaussian_geometry import bw_barycenter, project_spd
 METHODS = [
     ("Persistence", "persistence", "Pers.", "#A8AFB9"),
     ("Raw VAR", "raw_var_window_ar", "Raw VAR", "#5F6875"),
-    ("Seasonal", "seasonal_window_naive", "Seasonal", "#7A8B54"),
     ("Euclidean AR", "euclidean_gaussian_ar", "Euc.", "#6F98BF"),
     ("Cholesky AR", "cholesky_gaussian_ar", "Chol.", "#B98D63"),
     ("Log-Euclidean AR", "log_euclidean_gaussian_ar", "LogEuc.", "#927DB8"),

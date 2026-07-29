@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: install smoke simulations divvy figures
+.PHONY: install smoke simulations divvy figures data-figure
 
 install:
 	$(PYTHON) -m pip install -e .
@@ -19,3 +19,6 @@ divvy:
 
 figures:
 	PYTHONPATH=src $(PYTHON) scripts/build_artifacts.py
+
+data-figure:
+	PYTHONPATH=src $(PYTHON) scripts/build_divvy_background_figure.py
