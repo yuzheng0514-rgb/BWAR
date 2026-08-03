@@ -45,6 +45,7 @@ The frozen configuration is `configs/matched_reference_drift.json`. It uses
 36-observation rolling lag-design window, horizons 1, 3, and 6, and displacement
 grid `0, 0.6, 1.2, 1.8, 2.4`. The primary local fit uses the ridge selected for
 fixed BWAR; only the reference and re-encoding change in the primary contrast.
+The compact results retain this prespecified primary contrast.
 
 ## Divvy
 
@@ -56,12 +57,14 @@ make divvy
 The analysis constructs 364 Gaussian states from 72-hour windows advanced by
 24 hours, selects 30 stations using only the initial fitting data, and evaluates
 horizons 3, 4, and 5 on 183 common targets per horizon. The local window grid is
-`24, 48, 72`, its refresh period is 1, and selection uses validation raw RMSE.
-The primary moving-block length is 3, the sensitivity length is 6, and the
-bootstrap uses 10,000 resamples.
+`24, 48, 72`, and its refresh period is 1. Selection uses the
+training-standardized station-mean RMSE stored as
+`validation_raw_rmse` in the machine-readable artifacts. The primary
+moving-block length is 3, the sensitivity length is 6, and the bootstrap uses
+10,000 resamples.
 
-The compact reference directory contains only the seven methods reported in
-the article.
+The compact Divvy reference directory contains only the seven methods reported
+in the article.
 
 ## PEMS-BAY
 

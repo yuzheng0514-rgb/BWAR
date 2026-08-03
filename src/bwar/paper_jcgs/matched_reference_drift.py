@@ -1,9 +1,8 @@
 """Matched-start reference-adaptation simulation for the BWAR paper.
 
-This module is deliberately separate from the earlier sustained-versus-completed
-run.  Both path regimes share the complete fitting and validation block and have
-the same Bures displacement at the first test origin.  They differ only in
-whether the reference remains stable or continues moving during testing.
+Both path regimes share the complete fitting and validation block and have the
+same Bures displacement at the first test origin.  They differ only in whether
+the reference remains stable or continues moving during testing.
 """
 
 from __future__ import annotations
@@ -59,7 +58,6 @@ PRACTICAL_METHODS = (
     "log_euclidean",
     "fixed",
     "local",
-    "local_shared",
 )
 
 
@@ -652,7 +650,7 @@ def _evaluate_one_case(
     for horizon in config.horizons:
         selected: dict[str, float] = {}
         validation_means: dict[str, float] = {}
-        for method in ("fixed", "local", *chart_specs):
+        for method in ("fixed", *chart_specs):
             candidates = []
             for ridge in config.ridge_grid:
                 validation = _score_method(
@@ -678,8 +676,7 @@ def _evaluate_one_case(
         score_specs = (
             ("persistence", "persistence", np.nan),
             ("fixed", "fixed", selected["fixed"]),
-            ("local", "local", selected["local"]),
-            ("local_shared", "local", selected["fixed"]),
+            ("local", "local", selected["fixed"]),
             ("euclidean", "euclidean", selected["euclidean"]),
             ("cholesky", "cholesky", selected["cholesky"]),
             ("log_euclidean", "log_euclidean", selected["log_euclidean"]),
@@ -728,7 +725,7 @@ def _evaluate_one_case(
                     "method": method,
                     "selected_ridge": np.nan if method == "persistence" else float(frame.ridge.iloc[0]),
                     "validation_w2_mean": np.nan if method == "persistence" else float(
-                        validation_means["fixed" if method == "local_shared" else ("local" if method == "local" else method)]
+                        validation_means["fixed" if method == "local" else method]
                     ),
                     "test_w2_mean": loss,
                     "test_mean_component": float(frame.mean_loss.mean()),
@@ -838,7 +835,7 @@ def validate_results(raw: pd.DataFrame, origins: pd.DataFrame, references: pd.Da
             break
     primary_local_repair = bool(
         (
-            raw[raw.method.isin(("local", "local_shared"))]
+            raw[raw.method.eq("local")]
             .prediction_repair_count
             == 0
         ).all()
@@ -908,7 +905,7 @@ def make_figure(summary: pd.DataFrame, path_stem: Path, *, reps: int) -> dict[st
         ("cholesky", "Cholesky AR", "#C28455", "-", "s"),
         ("log_euclidean", "Log-Euclidean AR", "#8066A6", "-", "^"),
         ("fixed", "Fixed BWAR", "#2F6DB2", "--", "D"),
-        ("local_shared", "Local BWAR", "#C94B45", "-", "P"),
+        ("local", "Local BWAR", "#C94B45", "-", "P"),
     )
     # Use a separate scale for each regime--horizon panel.  The continuing
     # path has substantially larger losses at the long horizons; sharing its
@@ -945,7 +942,7 @@ def make_figure(summary: pd.DataFrame, path_stem: Path, *, reps: int) -> dict[st
                 mean = block.test_w2_mean.to_numpy(float)
                 low = block.test_w2_ci_low.to_numpy(float)
                 high = block.test_w2_ci_high.to_numpy(float)
-                alpha = 0.055 if method not in {"fixed", "local_shared"} else 0.10
+                alpha = 0.055 if method not in {"fixed", "local"} else 0.10
                 ax.fill_between(x, low, high, color=color, alpha=alpha, linewidth=0, zorder=1)
                 line = ax.plot(
                     x,
@@ -953,10 +950,10 @@ def make_figure(summary: pd.DataFrame, path_stem: Path, *, reps: int) -> dict[st
                     color=color,
                     linestyle=linestyle,
                     marker=marker,
-                    markersize=3.4 if method not in {"fixed", "local_shared"} else 3.9,
+                    markersize=3.4 if method not in {"fixed", "local"} else 3.9,
                     markerfacecolor="white",
                     markeredgewidth=0.85,
-                    linewidth=1.15 if method not in {"fixed", "local_shared"} else 1.45,
+                    linewidth=1.15 if method not in {"fixed", "local"} else 1.45,
                     zorder=3,
                     label=label,
                 )[0]
