@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -69,6 +70,16 @@ class ArticleArtifactTests(unittest.TestCase):
         )
         self.assertEqual(set(divvy["horizon"]), {3, 4, 5})
         self.assertEqual(divvy["method"].nunique(), 7)
+        protocol = json.loads(
+            (
+                ROOT
+                / "results"
+                / "reference"
+                / "divvy"
+                / "protocol.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(set(protocol["methods"]), set(divvy["method"]))
         targets = divvy.groupby(["method", "horizon"])["target_index"].nunique()
         self.assertEqual(set(targets), {183})
 
