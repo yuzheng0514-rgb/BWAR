@@ -460,123 +460,6 @@ def score_raw_var_window_baseline(
     }
 
 
-def _seasonal_source_index(target_index: int, forecast_origin: int, period_windows: int) -> int | None:
-    """Return the latest observable same-phase window for a seasonal naive forecast."""
-    if period_windows <= 0:
-        return None
-    source_index = target_index - period_windows
-    while source_index > forecast_origin:
-        source_index -= period_windows
-    if source_index < 0:
-        return None
-    return source_index
-
-
-def _score_seasonal_window_block(
-    means: np.ndarray,
-    covs: np.ndarray,
-    raw_windows: np.ndarray,
-    *,
-    start_t: int,
-    stop_t: int,
-    horizon: int,
-    seasonal_period_windows: int,
-    domain_profile: dict[str, object],
-) -> dict[str, float | int]:
-    losses: list[float] = []
-    log_scores: list[float] = []
-    domain_losses: list[float] = []
-    min_pred_eigs: list[float] = []
-    for t in range(start_t, stop_t):
-        target_index = t + horizon
-        if target_index >= len(means):
-            continue
-        source_index = _seasonal_source_index(target_index, t, seasonal_period_windows)
-        if source_index is None or source_index >= len(raw_windows):
-            continue
-        pred_mean, pred_cov = _window_moments(np.asarray(raw_windows[source_index], dtype=float))
-        target_mean = means[target_index]
-        target_cov = covs[target_index]
-        losses.append(gaussian_w2_squared(pred_mean, pred_cov, target_mean, target_cov))
-        log_scores.append(gaussian_log_score_from_moments(pred_mean, pred_cov, target_mean, target_cov))
-        domain_losses.append(domain_loss_from_moments(pred_mean, pred_cov, target_mean, target_cov, domain_profile))
-        min_pred_eigs.append(float(np.min(np.linalg.eigvalsh(project_spd(pred_cov, eps=1e-10)))))
-    arr = np.asarray(losses, dtype=float)
-    log_arr = np.asarray(log_scores, dtype=float)
-    domain_arr = np.asarray(domain_losses, dtype=float)
-    eig_arr = np.asarray(min_pred_eigs, dtype=float)
-    return {
-        "w2_mean": float(arr.mean()) if len(arr) else np.nan,
-        "w2_median": float(np.median(arr)) if len(arr) else np.nan,
-        "w2_q90": float(np.quantile(arr, 0.9)) if len(arr) else np.nan,
-        "log_score_mean": float(log_arr.mean()) if len(log_arr) else np.nan,
-        "log_score_median": float(np.median(log_arr)) if len(log_arr) else np.nan,
-        "log_score_q90": float(np.quantile(log_arr, 0.9)) if len(log_arr) else np.nan,
-        "domain_loss_mean": float(domain_arr.mean()) if len(domain_arr) else np.nan,
-        "domain_loss_median": float(np.median(domain_arr)) if len(domain_arr) else np.nan,
-        "domain_loss_q90": float(np.quantile(domain_arr, 0.9)) if len(domain_arr) else np.nan,
-        "n_pairs": int(len(arr)),
-        "min_pred_eig": float(eig_arr.min()) if len(eig_arr) else np.nan,
-    }
-
-
-def score_seasonal_window_baseline(
-    means: np.ndarray,
-    covs: np.ndarray,
-    raw_windows: np.ndarray,
-    *,
-    fit_end: int,
-    val_end: int,
-    block_start: int,
-    block_end: int,
-    horizon: int,
-    seasonal_period_windows: int,
-    domain_profile: dict[str, object] | None = None,
-) -> dict[str, float | int]:
-    profile = domain_metric_profile(None) if domain_profile is None else domain_profile
-    raw_windows = np.asarray(raw_windows, dtype=float)
-    val_metrics = _score_seasonal_window_block(
-        means,
-        covs,
-        raw_windows,
-        start_t=max(0, fit_end - horizon),
-        stop_t=max(0, val_end - horizon),
-        horizon=horizon,
-        seasonal_period_windows=seasonal_period_windows,
-        domain_profile=profile,
-    )
-    test_metrics = _score_seasonal_window_block(
-        means,
-        covs,
-        raw_windows,
-        start_t=max(0, block_start - horizon),
-        stop_t=max(0, block_end - horizon),
-        horizon=horizon,
-        seasonal_period_windows=seasonal_period_windows,
-        domain_profile=profile,
-    )
-    return {
-        "ridge": np.nan,
-        "val_w2_mean": float(val_metrics["w2_mean"]),
-        "val_w2_median": float(val_metrics["w2_median"]),
-        "val_log_score_mean": float(val_metrics["log_score_mean"]),
-        "val_log_score_median": float(val_metrics["log_score_median"]),
-        "val_domain_loss_mean": float(val_metrics["domain_loss_mean"]),
-        "val_domain_loss_median": float(val_metrics["domain_loss_median"]),
-        "test_w2_mean": float(test_metrics["w2_mean"]),
-        "test_w2_median": float(test_metrics["w2_median"]),
-        "test_w2_q90": float(test_metrics["w2_q90"]),
-        "test_log_score_mean": float(test_metrics["log_score_mean"]),
-        "test_log_score_median": float(test_metrics["log_score_median"]),
-        "test_log_score_q90": float(test_metrics["log_score_q90"]),
-        "test_domain_loss_mean": float(test_metrics["domain_loss_mean"]),
-        "test_domain_loss_median": float(test_metrics["domain_loss_median"]),
-        "test_domain_loss_q90": float(test_metrics["domain_loss_q90"]),
-        "n_test_pairs": int(test_metrics["n_pairs"]),
-        "min_pred_eig": float(test_metrics["min_pred_eig"]),
-    }
-
-
 def run_rolling_origin_series(
     *,
     job: str,
@@ -616,8 +499,6 @@ def run_rolling_origin_series(
         if window_size is None:
             window_size = int(np.asarray(raw_windows).shape[1])
     has_raw_baseline = raw_series is not None and window_starts is not None and window_size is not None
-    seasonal_period_windows = int(meta.get("seasonal_period_windows", 0) or 0)
-    has_seasonal_baseline = raw_windows is not None and seasonal_period_windows > 0
 
     def add(
         *,
@@ -714,44 +595,6 @@ def run_rolling_origin_series(
                             "error": repr(exc),
                         },
                     )
-            if has_seasonal_baseline:
-                try:
-                    add(
-                        origin=origin,
-                        fit_end=fit_end,
-                        val_end=val_end,
-                        test_end=test_end,
-                        horizon=horizon,
-                        method="seasonal_window_naive",
-                        metrics=score_seasonal_window_baseline(
-                            means,
-                            covs,
-                            np.asarray(raw_windows, dtype=float),
-                            fit_end=fit_end,
-                            val_end=val_end,
-                            block_start=val_end,
-                            block_end=test_end,
-                            horizon=horizon,
-                            seasonal_period_windows=seasonal_period_windows,
-                            domain_profile=profile,
-                        ),
-                    )
-                except Exception as exc:
-                    add(
-                        origin=origin,
-                        fit_end=fit_end,
-                        val_end=val_end,
-                        test_end=test_end,
-                        horizon=horizon,
-                        method="seasonal_window_naive",
-                        metrics={
-                            "test_w2_mean": np.nan,
-                            "test_log_score_mean": np.nan,
-                            "test_domain_loss_mean": np.nan,
-                            "error": repr(exc),
-                        },
-                    )
-
             encoders = [
                 ("euclidean_gaussian_ar", euclidean_encode, lambda z, dim=d: euclidean_decode(z, dim)),
                 ("cholesky_gaussian_ar", cholesky_encode, lambda z, dim=d: cholesky_decode(z, dim)),

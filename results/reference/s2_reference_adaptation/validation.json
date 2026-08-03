@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "numerical_gates": {
+    "finite_outputs": true,
+    "start_displacement_matches_target": true,
+    "matched_test_start_displacement": true,
+    "no_generator_clipping": true,
+    "generator_transport_safe": true,
+    "no_primary_local_prediction_repairs": true,
+    "fixed_bwar_repair_rate_below_1_percent": true,
+    "reference_residual_controlled": true,
+    "all_replications_retained": true
+  },
+  "maximum_start_displacement_error": 1.3575603930867164e-07,
+  "maximum_reference_residual": 3.5388294335456936e-06,
+  "fixed_bwar_repair_rate": 0.0003333333333333333,
+  "generator_seed_resample_rate": 0.0,
+  "maximum_generator_seed_resamples": 0
+}

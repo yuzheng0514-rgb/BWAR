@@ -25,7 +25,7 @@ from bwar.gaussian_geometry import (  # noqa: E402
 from bwar.paper_jcgs.gaussian_models import fit_var  # noqa: E402
 
 
-OUT_DIR = ROOT / "results" / "generated" / "fixed_simulation"
+OUT_DIR = ROOT / "results" / "generated" / "s1_geometry"
 OVERLEAF = ROOT / "artifacts" / "generated"
 TABLE_DIR = OVERLEAF / "tables"
 FIGURE_DIR = OVERLEAF / "figures"
@@ -145,12 +145,23 @@ def simulate_transport_linear_gaussians(
 
     means = np.empty((n, d), dtype=float)
     covs = np.empty((n, d, d), dtype=float)
+    transport_clip_count = 0
+    shell_clip_count = 0
     for t in range(n):
         u_t = z[t, :d]
         v_t = z[t, d:]
+        raw_transport = np.eye(d) + mat_from_triu(v_t, d)
+        transport_clip_count += int(
+            np.linalg.eigvalsh(raw_transport).min() < 0.05
+        )
         A_t = safe_transport_from_vech(v_t, d, min_transport_eig=0.05)
         means[t] = ref_mean + u_t
-        covs[t] = project_to_spectral_shell(A_t @ ref_cov @ A_t.T, lo=0.05, hi=20.0)
+        raw_covariance = A_t @ ref_cov @ A_t.T
+        raw_eigenvalues = np.linalg.eigvalsh(raw_covariance)
+        shell_clip_count += int(
+            raw_eigenvalues.min() < 0.05 or raw_eigenvalues.max() > 20.0
+        )
+        covs[t] = project_to_spectral_shell(raw_covariance, lo=0.05, hi=20.0)
 
     meta = {
         "generating_coordinate": "bures_transport",
@@ -163,6 +174,8 @@ def simulate_transport_linear_gaussians(
         "mean_dispersion": float(mean_dispersion),
         "spectral_shell_low": 0.05,
         "spectral_shell_high": 20.0,
+        "generator_transport_clip_rate": float(transport_clip_count / n),
+        "generator_shell_clip_rate": float(shell_clip_count / n),
     }
     return means, covs, ref_mean, ref_cov, meta
 
@@ -648,17 +661,21 @@ def run_setting(
 
 def default_settings() -> list[dict[str, object]]:
     return [
-        {"design": "Baseline", "n": 320, "d": 8, "phi": 0.70, "dispersion": 0.35},
-        {"design": "Shorter series", "n": 200, "d": 8, "phi": 0.70, "dispersion": 0.35},
-        {"design": "Higher dimension", "n": 320, "d": 10, "phi": 0.70, "dispersion": 0.32},
-        {"design": "Weaker dynamics", "n": 320, "d": 8, "phi": 0.50, "dispersion": 0.35},
-        {"design": "Larger variation", "n": 320, "d": 8, "phi": 0.70, "dispersion": 0.50},
+        # The smaller covariance-coordinate scales keep the transport generator
+        # inside the SPD shell with only rare admissibility projections.  This
+        # preserves the intended transport-linear mechanism instead of making
+        # the projection itself a dominant part of the data-generating process.
+        {"design": "Baseline", "n": 320, "d": 8, "phi": 0.70, "dispersion": 0.15},
+        {"design": "Shorter series", "n": 200, "d": 8, "phi": 0.70, "dispersion": 0.15},
+        {"design": "Higher dimension", "n": 320, "d": 10, "phi": 0.70, "dispersion": 0.12},
+        {"design": "Weaker dynamics", "n": 320, "d": 8, "phi": 0.50, "dispersion": 0.15},
+        {"design": "Larger variation", "n": 320, "d": 8, "phi": 0.70, "dispersion": 0.18},
         {
             "design": "Log-Euclidean mechanism",
             "n": 320,
             "d": 8,
             "phi": 0.70,
-            "dispersion": 0.35,
+            "dispersion": 0.15,
             "generating_coordinate": "log_euclidean",
         },
         {
@@ -666,7 +683,7 @@ def default_settings() -> list[dict[str, object]]:
             "n": 320,
             "d": 8,
             "phi": 0.70,
-            "dispersion": 0.35,
+            "dispersion": 0.15,
             "generating_coordinate": "cholesky",
         },
     ]
@@ -689,7 +706,13 @@ def summarize(raw: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def write_main_table(summary: pd.DataFrame, path: Path) -> None:
+def write_main_table(
+    summary: pd.DataFrame,
+    path: Path,
+    *,
+    reps: int | None = None,
+    ar_model: str = "diag",
+) -> None:
     part = summary.loc[summary["design"].eq("Baseline")].copy()
     stats = {row["method"]: row for _, row in part.iterrows()}
     method_codes = [code for _, code, _, _ in METHODS]
@@ -698,7 +721,7 @@ def write_main_table(summary: pd.DataFrame, path: Path) -> None:
     lines = [
         r"\begin{table}[H]",
         r"\centering",
-        r"\caption{Transport-linear Gaussian simulation. Entries are mean test-loss ratios to persistence over 50 replications, with standard errors in parentheses. Lower values are better. The design uses \(d=8\), \(T=320\), a non-identity Bures reference, and diagonal ridge Yule--Walker AR(1) fits.}",
+        rf"\caption{{Transport-linear Gaussian simulation. Entries are mean test-loss ratios to persistence over {reps if reps is not None else 50} replications, with standard errors in parentheses. Lower values are better. The design uses \(d=8\), \(T=320\), a non-identity Bures reference, and {ar_model} ridge VAR(1) lag-design fits.}}",
         r"\label{tab:synthetic-transport-main}",
         r"\begin{tabular}{lrr}",
         r"\toprule",
@@ -716,7 +739,13 @@ def write_main_table(summary: pd.DataFrame, path: Path) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_variation_table(summary: pd.DataFrame, path: Path) -> None:
+def write_variation_table(
+    summary: pd.DataFrame,
+    path: Path,
+    *,
+    reps: int | None = None,
+    ar_model: str = "diag",
+) -> None:
     designs = [
         "Baseline",
         "Shorter series",
@@ -730,7 +759,7 @@ def write_variation_table(summary: pd.DataFrame, path: Path) -> None:
     lines = [
         r"\begin{table}[H]",
         r"\centering",
-        r"\caption{Parameter and generating-coordinate variations for the Gaussian simulation. Entries are full \(W_2^2\) loss ratios to persistence, reported as mean (standard error) over 50 replications. The first five rows use the Bures transport generator; the final two rows use Log-Euclidean and log-diagonal Cholesky covariance coordinates, respectively. Lower values are better.}",
+        rf"\caption{{Parameter and generating-coordinate variations for the Gaussian simulation. Entries are full \(W_2^2\) loss ratios to persistence, reported as mean (standard error) over {reps if reps is not None else 50} replications. The first five rows use the Bures transport generator; the final two rows use Log-Euclidean and log-diagonal Cholesky covariance coordinates, respectively, with {ar_model} ridge VAR(1) lag-design fits. Lower values are better.}}",
         r"\label{tab:synthetic-transport-variation}",
         r"\resizebox{\linewidth}{!}{%",
         r"\begin{tabular}{lrrrrrrrr}",
