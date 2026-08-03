@@ -17,12 +17,13 @@ construction is an extension evaluated separately.
 - `scripts/run_matched_reference_drift.py`: 100-replication matched-start reference-adaptation study (S2).
 - `scripts/run_divvy.py`: chronological Divvy target-level analysis.
 - `scripts/run_pems_bay.py`: chronological PEMS-BAY panel analysis.
-- `scripts/build_artifacts.py`: manuscript Table 1--3 and Figure 3 builder.
+- `scripts/build_artifacts.py`: manuscript Tables 1--3 and Figure 3 builder.
 - `results/reference/`: compact results corresponding to the submitted article.
 - `artifacts/reference/`: manuscript-ready tables and the S2 figure.
 
-The replication panel contains exactly the seven methods reported in the
-article.
+Each experiment contains exactly the methods reported for that experiment.
+Retired data sets, weekly or seasonal comparators, exploratory simulations, and
+superseded article artifacts are excluded from this release.
 
 ## Installation
 

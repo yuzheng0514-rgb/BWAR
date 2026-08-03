@@ -10,6 +10,7 @@
   "horizons": [3, 4, 5],
   "rolling_origins": 5,
   "coordinate_model": "unrestricted centered ridge lag-design VAR(1)",
+  "selection_endpoint": "training-standardized station-mean RMSE",
   "local_reference_windows": [24, 48, 72],
   "bootstrap": {
     "kind": "origin-preserving moving-block bootstrap",

@@ -74,7 +74,7 @@ def _run_jobs(reps: int, workers: int, config: MatchedReferenceConfig):
 
 
 def _write_report(path, *, config, reps, workers, elapsed, summary, validation, figure):
-    primary = summary[summary.method.isin(("fixed", "local_shared"))]
+    primary = summary[summary.method.isin(("fixed", "local"))]
     lines = [
         "# S2 matched-start reference-adaptation run report",
         "",
