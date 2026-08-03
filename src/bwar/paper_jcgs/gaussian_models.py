@@ -172,12 +172,15 @@ def log_euclidean_decode(z: np.ndarray, d: int) -> tuple[np.ndarray, np.ndarray]
 
 
 def fit_var(Z: np.ndarray, end: int, *, lam: float, model: str) -> np.ndarray:
-    """Fit the article's ridge Yule--Walker VAR(1) in row-vector form.
+    """Fit the article's ridge lag-design VAR(1) in row-vector form.
 
-    With coordinates centered by their full fitting-block mean, the estimator
-    is ``B = Gamma_1 @ inv(Gamma_0 + lam * I)``. The returned augmented matrix
-    stores ``B.T`` below the intercept so existing recursive row forecasts
-    implement ``mean + (state - mean) @ B.T``.
+    This is the ``p=1`` special case of equation (3.8): coordinates are
+    centered by the fitting-block mean, the lagged design is formed from
+    ``Z[:-1]``, and ridge is applied to its positive-semidefinite Gram matrix.
+    ``model='diag'`` applies the same normal equations coordinate-wise;
+    ``model='full'`` fits the unrestricted VAR(1).  The returned augmented
+    matrix stores the row coefficient matrix below the intercept, so recursive
+    forecasts implement ``mean + (state - mean) @ A``.
     """
 
     fitted = np.asarray(Z[:end], dtype=float)
@@ -192,17 +195,22 @@ def fit_var(Z: np.ndarray, end: int, *, lam: float, model: str) -> np.ndarray:
     n, q = fitted.shape
     coordinate_mean = fitted.mean(axis=0)
     centered = fitted - coordinate_mean
-    gamma0_diag = np.mean(centered**2, axis=0)
-    gamma1_diag = np.mean(centered[1:] * centered[:-1], axis=0)
+    lagged = centered[:-1]
+    response = centered[1:]
+    n_lagged = len(lagged)
 
     if model == "diag":
-        row_coefficients = np.diag(gamma1_diag / (gamma0_diag + lam))
+        gram_diagonal = np.sum(lagged**2, axis=0)
+        cross_diagonal = np.sum(lagged * response, axis=0)
+        row_coefficients = np.diag(
+            cross_diagonal / (gram_diagonal + n_lagged * lam)
+        )
     elif model == "full":
-        gamma0 = centered.T @ centered / n
-        gamma1 = centered[1:].T @ centered[:-1] / (n - 1)
+        gram = lagged.T @ lagged
+        cross = lagged.T @ response
         row_coefficients = np.linalg.solve(
-            gamma0 + lam * np.eye(q),
-            gamma1.T,
+            gram + n_lagged * lam * np.eye(q),
+            cross,
         )
     else:
         raise ValueError(f"unknown ar_model: {model}")

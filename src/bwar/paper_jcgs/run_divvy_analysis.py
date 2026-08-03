@@ -35,7 +35,7 @@ MONTHS = tuple(f"2024{month:02d}" for month in range(1, 13))
 WINDOW = 72
 STEP = 24
 DIMENSION = 30
-HORIZONS = (3, 4)
+HORIZONS = (3, 4, 5)
 MAX_MATRICES = 2000
 MAX_ORIGINS = 6
 BOOTSTRAP_BLOCK_LENGTH = 3
@@ -411,8 +411,10 @@ def write_manifest(
         "primary_horizon_rule": "ceil(window / step), the first non-overlapping target window",
         "reference": "fixed Bures barycenter computed from each origin's fit block",
         "ar_model": "full AR(1)",
-        "primary_endpoint": "training-standardized physical-mean RMSE",
-        "supplement_endpoint": "same-task Gaussian W2-squared loss",
+        "reported_endpoints": [
+            "same-task Gaussian W2-squared loss",
+            "training-standardized physical-mean RMSE",
+        ],
         "evaluation_protocol": str(long["evaluation_protocol"].iloc[0]),
         "station_selection": "top activity-variability score using only the first origin's raw fit block",
         "standardization": "center and scale fixed from the first origin's raw fit block",

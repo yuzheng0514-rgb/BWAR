@@ -17,7 +17,7 @@ FIGURE_DIR = OVERLEAF / "figures"
 SYNTH_OUT = Path(
     os.environ.get(
         "BWAR_SYNTH_OUT",
-        ROOT / "results" / "reference" / "fixed_simulation",
+        ROOT / "results" / "reference" / "s1_geometry",
     )
 )
 REAL_OUT = Path(

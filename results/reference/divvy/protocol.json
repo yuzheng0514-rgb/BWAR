@@ -9,6 +9,11 @@
   "step_hours": 24,
   "horizons": [3, 4, 5],
   "rolling_origins": 5,
+  "common_targets_per_horizon": 183,
+  "methods": [
+    "persistence", "euclidean", "cholesky", "log_euclidean",
+    "fixed_bwar", "local_bwar", "local_bwar_shared_ridge"
+  ],
   "coordinate_model": "unrestricted centered ridge lag-design VAR(1)",
   "local_reference_windows": [24, 48, 72],
   "bootstrap": {

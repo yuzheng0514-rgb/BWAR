@@ -577,6 +577,42 @@ def fixed_point_residual(current: np.ndarray, covs: np.ndarray) -> float:
     return residual
 
 
+def exact_bures_barycenter(
+    covs: object,
+    *,
+    max_iter: int = _EXACT_MAX_ITER,
+    tolerance: float = _EXACT_TOL,
+) -> tuple[np.ndarray, float]:
+    """Return the safeguarded exact covariance barycenter and final residual."""
+
+    covariance_array = _as_float_array(covs, name="covs")
+    if covariance_array.ndim != 3:
+        raise ValueError("covs must be a three-dimensional array")
+    if (
+        len(covariance_array) == 0
+        or covariance_array.shape[1] == 0
+        or covariance_array.shape[1] != covariance_array.shape[2]
+    ):
+        raise ValueError("covs must contain nonempty positive-dimension square matrices")
+    max_iter_value = _validate_positive_integer(
+        max_iter,
+        name="max_iter",
+        minimum=1,
+    )
+    if isinstance(tolerance, (bool, np.bool_)) or not isinstance(tolerance, Real):
+        raise ValueError("tolerance must be a finite positive real scalar")
+    tolerance_value = float(tolerance)
+    if not np.isfinite(tolerance_value) or tolerance_value <= 0.0:
+        raise ValueError("tolerance must be a finite positive real scalar")
+    prepared = _prepare_covariances(covariance_array)
+    covariance, residual = _solve_exact_barycenter(
+        prepared,
+        max_iter=max_iter_value,
+        tolerance=tolerance_value,
+    )
+    return np.array(covariance, copy=True), float(residual)
+
+
 def _solve_exact_barycenter(
     prepared: _PreparedCovariances,
     *,
@@ -877,8 +913,8 @@ class RollingBuresReference:
 
 
 @dataclass(frozen=True)
-class DualRidgeYuleWalkerAR1:
-    """Memory-efficient ridge Yule--Walker AR(1) fit.
+class DualLaggedRidgeAR1:
+    """Memory-efficient ridge lag-design AR(1) fit.
 
     The fitted coefficient matrix is represented as ``projection @ response``
     so a high-dimensional coordinate system does not require storing or
@@ -925,14 +961,14 @@ class DualRidgeYuleWalkerAR1:
         return predicted
 
 
-def fit_dual_ridge_yule_walker_ar1(
+def fit_dual_lagged_ridge_ar1(
     coordinates: np.ndarray,
     *,
     ridge: float,
-) -> DualRidgeYuleWalkerAR1:
-    """Fit the article's ridge Yule--Walker AR(1) in dual form.
+) -> DualLaggedRidgeAR1:
+    """Fit the article's ridge lag-design AR(1) in dual form.
 
-    This is algebraically identical to the full estimator in
+    This is algebraically identical to the full ``p=1`` estimator in
     :func:`bwar.paper_jcgs.gaussian_models.fit_var`, but solves an
     observation-by-observation system when the coordinate dimension is larger
     than the local fitting window.
@@ -959,46 +995,46 @@ def fit_dual_ridge_yule_walker_ar1(
         coordinate_mean = coordinates.mean(axis=0)
     if not np.isfinite(coordinate_mean).all():
         raise ValueError(
-            "nonfinite coordinate mean while fitting ridge Yule--Walker AR(1)"
+            "nonfinite coordinate mean while fitting ridge lag-design AR(1)"
         )
 
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
         centered = coordinates - coordinate_mean
     if not np.isfinite(centered).all():
         raise ValueError(
-            "nonfinite centered coordinates while fitting ridge Yule--Walker AR(1)"
+            "nonfinite centered coordinates while fitting ridge lag-design AR(1)"
         )
 
     lagged = centered[:-1]
     response = centered[1:]
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        gram = centered @ centered.T
+        gram = lagged @ lagged.T
     if not np.isfinite(gram).all():
         raise ValueError(
-            "nonfinite Gram matrix while fitting ridge Yule--Walker AR(1)"
+            "nonfinite Gram matrix while fitting ridge lag-design AR(1)"
         )
 
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        system = gram + n * ridge_value * np.eye(n)
+        system = gram + (n - 1) * ridge_value * np.eye(n - 1)
     if not np.isfinite(system).all():
         raise ValueError(
             "nonfinite regularized Gram matrix while fitting ridge "
-            "Yule--Walker AR(1)"
+            "lag-design AR(1)"
         )
 
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
         try:
-            correction = np.linalg.solve(system, centered @ lagged.T)
+            response_coef = np.linalg.solve(system, response)
         except np.linalg.LinAlgError as exc:
             raise ValueError(
-                "dual ridge Yule--Walker system could not be solved"
+                "dual ridge lag-design system could not be solved"
             ) from exc
-        projection = (
-            lagged.T - centered.T @ correction
-        ) / ((n - 1) * ridge_value)
+        projection = lagged.T
     if not np.isfinite(projection).all():
-        raise ValueError("nonfinite dual ridge Yule--Walker projection")
-    return DualRidgeYuleWalkerAR1(coordinate_mean, projection, response)
+        raise ValueError("nonfinite dual ridge lag-design projection")
+    if not np.isfinite(response_coef).all():
+        raise ValueError("nonfinite dual ridge lag-design response coefficients")
+    return DualLaggedRidgeAR1(coordinate_mean, projection, response_coef)
 
 
 @dataclass(frozen=True)
@@ -1043,7 +1079,7 @@ class PrimalRidgeAR1:
 
 
 def fit_primal_ridge_ar1(coordinates: np.ndarray, *, ridge: float) -> PrimalRidgeAR1:
-    """Fit centered primal ridge AR(1) using only a d-by-d linear system."""
+    """Fit the ridge lag-design AR(1) normal equations in primal form."""
 
     coordinates = _as_float_array(coordinates, name="coordinates")
     if coordinates.ndim != 2:
@@ -1061,17 +1097,18 @@ def fit_primal_ridge_ar1(coordinates: np.ndarray, *, ridge: float) -> PrimalRidg
     if not np.isfinite(ridge_value) or ridge_value <= 0:
         raise ValueError("ridge must be a finite real scalar greater than zero")
 
-    X = coordinates[:-1]
-    Y = coordinates[1:]
+    coordinate_mean = coordinates.mean(axis=0)
+    X = coordinates[:-1] - coordinate_mean
+    Y = coordinates[1:] - coordinate_mean
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        x_mean = X.mean(axis=0)
-        y_mean = Y.mean(axis=0)
+        x_mean = coordinate_mean
+        y_mean = coordinate_mean
     if not np.isfinite(x_mean).all() or not np.isfinite(y_mean).all():
         raise ValueError("nonfinite intermediate means while fitting primal ridge AR(1)")
 
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        x_centered = X - x_mean
-        y_centered = Y - y_mean
+        x_centered = X
+        y_centered = Y
     if not np.isfinite(x_centered).all() or not np.isfinite(y_centered).all():
         raise ValueError("nonfinite centered coordinates while fitting primal ridge AR(1)")
 
@@ -1082,7 +1119,7 @@ def fit_primal_ridge_ar1(coordinates: np.ndarray, *, ridge: float) -> PrimalRidg
         raise ValueError("nonfinite normal equations while fitting primal ridge AR(1)")
 
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        system = gram + ridge_value * np.eye(coordinates.shape[1])
+        system = gram + len(X) * ridge_value * np.eye(coordinates.shape[1])
     if not np.isfinite(system).all():
         raise ValueError("nonfinite regularized Gram matrix while fitting primal ridge AR(1)")
 
@@ -1154,7 +1191,7 @@ def forecast_online_encoded(
     if not np.isfinite(active_coordinates).all():
         raise ValueError("active coordinates must be finite")
 
-    model = fit_dual_ridge_yule_walker_ar1(
+    model = fit_dual_lagged_ridge_ar1(
         active_coordinates,
         ridge=ridge,
     )
@@ -1351,7 +1388,7 @@ def forecast_local_bwar(
     if geometry.coordinates.shape[1:] != (expected_coordinate_dimension,):
         raise ValueError("geometry coordinate dimension is incompatible with its reference")
 
-    model = fit_dual_ridge_yule_walker_ar1(
+    model = fit_dual_lagged_ridge_ar1(
         geometry.coordinates,
         ridge=ridge,
     )
